@@ -1,0 +1,15 @@
+:root {
+    --theme-blue: #393185;
+    --theme-green: #087637;
+    --theme-white: #ffffff;
+}
+
+body {
+    font-family: "Trebuchet MS", sans-serif;
+    color: #4a5568;
+}
+
+.custom-container {
+    max-width: 1600px !important;
+    margin: 0 auto;
+}

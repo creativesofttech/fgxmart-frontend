@@ -1,0 +1,10 @@
+:root {
+    --theme-blue: #393185;
+    --theme-green: #087637;
+    --theme-white: #ffffff;
+}
+
+body {
+    font-family: 'Public Sans', sans-serif;
+    color: #4a5568;
+}
