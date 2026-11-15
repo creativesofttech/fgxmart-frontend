@@ -1,0 +1,59 @@
+/* No global Preflight reset: existing Vuetify pages and admin keep their styling.
+   Both Tailwind utilities and daisyUI components use the tw: prefix. */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme) prefix(tw);
+@import "tailwindcss/utilities.css" layer(utilities) prefix(tw);
+
+@plugin "daisyui" {
+  themes: false;
+  exclude: rootcolor, rootscrollgutter, rootscrolllock, scrollbar;
+  logs: false;
+}
+
+@plugin "daisyui/theme" {
+  name: "fgx";
+  default: false;
+  prefersdark: false;
+  themecontroller: false;
+  color-scheme: light;
+  --color-base-100: #ffffff;
+  --color-base-200: #f6f4fa;
+  --color-base-300: #e9e4f0;
+  --color-base-content: #211538;
+  --color-primary: #472580;
+  --color-primary-content: #ffffff;
+  --color-secondary: #508c0a;
+  --color-secondary-content: #ffffff;
+  --color-accent: #ece5f8;
+  --color-accent-content: #472580;
+  --color-neutral: #282132;
+  --color-neutral-content: #ffffff;
+  --color-info: #3666c7;
+  --color-info-content: #ffffff;
+  --color-success: #36833c;
+  --color-success-content: #ffffff;
+  --color-warning: #f3c344;
+  --color-warning-content: #382c0a;
+  --color-error: #c53c4b;
+  --color-error-content: #ffffff;
+  --radius-selector: 0.5rem;
+  --radius-field: 0.6rem;
+  --radius-box: 1rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
+
+[data-theme="fgx"] {
+  --fgx-purple: #472580;
+  --fgx-green: #508c0a;
+  --fgx-ink: #211538;
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+}
+
+[data-theme="fgx"] :focus-visible {
+  outline: 2px solid #6741a9;
+  outline-offset: 4px;
+}

@@ -129,6 +129,8 @@
 </template>
 
 <script setup>
+const mediaBase = useRuntimeConfig().public.apiBase.replace(/\/api\/v1\/?$/, "")
+
 import { useCartStore } from '~/stores/cart'
 
 const cart = useCartStore()
@@ -140,7 +142,7 @@ useHead({
 const getImageUrl = (path) => {
   if (!path) return 'https://placehold.co/100'
   if (path.startsWith('http')) return path
-  return `http://localhost:8000/storage/${path}`
+  return `${mediaBase}/storage/${path}`
 }
 
 const { gtag } = useGtag()

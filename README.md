@@ -1,75 +1,40 @@
-# Nuxt Minimal Starter
+# FGXMART storefront and administration
 
-Look at the [Nuxt documentation](https://nuxt.com/docs/getting-started/introduction) to learn more.
+One Nuxt application serves the catalog and admin panel. The Laravel API lives in `../fgxmart-backend`.
 
-## Setup
+- Storefront: `/`
+- Admin sign-in: `/admin-access`
+- Admin panel: `/admin/dashboard` and `/admin/*`
 
-Make sure to install dependencies:
+## Local development
 
-```bash
-# npm
-npm install
+Copy `.env.example` to `.env`, configure the Laravel API URL, then run:
 
-# pnpm
-pnpm install
-
-# yarn
-yarn install
-
-# bun
-bun install
-```
-
-## Development Server
-
-Start the development server on `http://localhost:3000`:
-
-```bash
-# npm
+```sh
+npm ci
 npm run dev
-
-# pnpm
-pnpm dev
-
-# yarn
-yarn dev
-
-# bun
-bun run dev
 ```
+
+Start Laravel separately. Use an administrator account for admin access; customer credentials cannot access administration.
 
 ## Production
 
-Build the application for production:
-
-```bash
-# npm
+```sh
+npm ci
 npm run build
-
-# pnpm
-pnpm build
-
-# yarn
-yarn build
-
-# bun
-bun run build
+node .output/server/index.mjs
 ```
 
-Locally preview production build:
+This application requires a Node/Nitro server and HTTPS in production. Static-only deployment does not support admin sessions or the API proxy.
 
-```bash
-# npm
-npm run preview
+Read [DEPLOYMENT.md](DEPLOYMENT.md) for environment variables, backend migration and permission seeding, account provisioning, session security, and validation commands.
 
-# pnpm
-pnpm preview
+## Tests
 
-# yarn
-yarn preview
-
-# bun
-bun run preview
+```sh
+npx playwright install chromium
+npm run build
+npm test
 ```
 
-Check out the [deployment documentation](https://nuxt.com/docs/getting-started/deployment) for more information.
+Tests start the production Nuxt build and an isolated API fixture, then check route protection, session cookies, request forwarding, permission denial, and browser login/navigation/save/logout. Run Laravel's separate test suite to verify real backend authorization.

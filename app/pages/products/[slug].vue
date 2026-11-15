@@ -365,6 +365,8 @@
 </template>
 
 <script setup>
+const mediaBase = useRuntimeConfig().public.apiBase.replace(/\/api\/v1\/?$/, "")
+
 import { ref, computed } from 'vue'
 import { useCartStore } from '~/stores/cart'
 import { useWishlistStore } from '~/stores/wishlist'
@@ -406,7 +408,7 @@ const breadcrumbs = computed(() => [
 const getImageUrl = (path) => {
   if (!path) return 'https://placehold.co/400'
   if (path.startsWith('http')) return path
-  return `http://localhost:8000/storage/${path}`
+  return `${mediaBase}/storage/${path}`
 }
 
 const allImages = computed(() => {

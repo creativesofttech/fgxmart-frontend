@@ -86,7 +86,9 @@ const { data: categoryResponse } = await useFetch(`${apiBase}/categories/${route
 const category = computed(() => categoryResponse.value?.data)
 
 // Fetch Products for this Category
-const { data: productsData, pending } = await useFetch(`${apiBase}/products?category=${route.params.slug}`)
+const { data: productsData, pending } = await useFetch(`${apiBase}/products`, {
+  query: { category_id: category.value?.id }
+})
 const products = computed(() => productsData.value?.data || [])
 
 const breadcrumbs = computed(() => [
@@ -125,7 +127,7 @@ useHead({
 
 /* Ensure 5 columns on large screens (lg="2.4" works with 12-column grid) */
 @media (min-width: 1280px) {
-  .v-col-lg-2.4 {
+  .v-col-lg-2\.4 {
     flex: 0 0 20%;
     max-width: 20%;
   }

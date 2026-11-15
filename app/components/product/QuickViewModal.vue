@@ -129,6 +129,8 @@
 </template>
 
 <script setup>
+const mediaBase = useRuntimeConfig().public.apiBase.replace(/\/api\/v1\/?$/, "")
+
 const props = defineProps({
   modelValue: Boolean,
   product: {
@@ -148,7 +150,7 @@ const internalDialog = computed({
 const getImageUrl = (path) => {
   if (!path) return 'https://placehold.co/400'
   if (path.startsWith('http')) return path
-  return `http://localhost:8000/storage/${path}`
+  return `${mediaBase}/storage/${path}`
 }
 
 // Variation Logic

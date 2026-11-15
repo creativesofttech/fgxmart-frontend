@@ -2,29 +2,46 @@
   "name": "frontend",
   "type": "module",
   "private": true,
+  "engines": {
+    "node": "^22.22.3 || ^24.15.0 || >=26.0.0"
+  },
   "scripts": {
     "build": "nuxt build",
     "dev": "nuxt dev",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
-    "postinstall": "nuxt prepare"
+    "postinstall": "nuxt prepare",
+    "test": "node --test tests/*.test.mjs",
+    "images:home": "node scripts/optimize-home-images.mjs"
   },
   "dependencies": {
     "@mdi/font": "^7.4.47",
     "@pinia/nuxt": "^0.11.3",
+    "@vueuse/core": "^15.0.0",
+    "animejs": "^4.5.0",
+    "chart.js": "^4.5.1",
     "jspdf": "^4.1.0",
     "jspdf-autotable": "^5.0.7",
-    "nuxt": "^4.3.1",
+    "lodash-es": "^4.17.23",
+    "lucide-vue-next": "^0.564.0",
+    "motion-v": "^2.12.0",
+    "nuxt": "^4.6.4",
     "nuxt-gtag": "^4.1.0",
     "pinia": "^3.0.4",
     "vite-plugin-vuetify": "^2.1.3",
-    "vue": "^3.5.28",
-    "vue-router": "^4.6.4",
+    "vue": "^3.5.45",
+    "vue-chartjs": "^5.3.3",
+    "vue-router": "^5.4.0",
     "vuetify": "^3.11.8"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
+    "@tailwindcss/vite": "^4.3.5",
+    "@types/lodash-es": "^4.17.12",
     "@types/node": "^25.3.0",
-    "lucide-vue-next": "^0.564.0",
-    "sass": "^1.97.3"
+    "daisyui": "^5.8.0",
+    "sass": "^1.97.3",
+    "sharp": "^0.35.5",
+    "tailwindcss": "^4.3.5"
   }
 }

@@ -102,6 +102,8 @@
 </template>
 
 <script setup>
+const mediaBase = useRuntimeConfig().public.apiBase.replace(/\/api\/v1\/?$/, "")
+
 const props = defineProps({
   product: {
     type: Object,
@@ -126,7 +128,7 @@ const toggleWishlist = async () => {
 const getImageUrl = (path) => {
   if (!path) return 'https://placehold.co/200'
   if (path.startsWith('http')) return path
-  return `http://localhost:8000/storage/${path}`
+  return `${mediaBase}/storage/${path}`
 }
 
 const calculateDiscount = (base, discount) => {

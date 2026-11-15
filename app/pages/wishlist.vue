@@ -77,6 +77,8 @@
 </template>
 
 <script setup>
+const mediaBase = useRuntimeConfig().public.apiBase.replace(/\/api\/v1\/?$/, "")
+
 import { ref } from 'vue'
 import { useWishlistStore } from '~/stores/wishlist'
 import { useCartStore } from '~/stores/cart'
@@ -88,11 +90,10 @@ const addingToCart = ref(null)
 useHead({
   title: 'My Wishlist - FGXMART'
 })
-凄
 const getImageUrl = (path) => {
   if (!path) return 'https://placehold.co/200'
   if (path.startsWith('http')) return path
-  return `http://localhost:8000/storage/${path}`
+  return `${mediaBase}/storage/${path}`
 }
 
 const addToCart = async (product) => {

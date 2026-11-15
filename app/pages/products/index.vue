@@ -63,6 +63,7 @@
 
         <!-- Product Grid -->
         <v-col cols="12" md="9">
+          <h1 v-if="dealsOnly" class="text-h4 font-weight-bold mb-5">Hot Deals</h1>
           <!-- Top Bar -->
           <v-card class="rounded-xl border pa-4 mb-6 d-flex align-center justify-space-between px-6" elevation="0">
             <div class="text-body-1 font-weight-medium">
@@ -138,12 +139,14 @@
 </template>
 
 <script setup>
+const mediaBase = useRuntimeConfig().public.apiBase.replace(/\/api\/v1\/?$/, "")
+
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ProductCard from '~/components/product/ProductCard.vue'
 import QuickViewModal from '~/components/product/QuickViewModal.vue'
 
-const apiBase = 'http://localhost:8000/api/v1'
+const apiBase = useRuntimeConfig().public.apiBase
 const route = useRoute()
 const router = useRouter()
 
@@ -151,6 +154,7 @@ const showQuickView = ref(false)
 const selectedProduct = ref({})
 const selectedCategorySlug = ref(null)
 const searchQuery = ref(route.query.search || '')
+const dealsOnly = computed(() => route.query.deals === '1')
 const priceRange = ref([0, 1000])
 const sortBy = ref('Newest')
 const sortOptions = ['Newest', 'Price: Low to High', 'Price: High to Low', 'Name: A-Z']
@@ -179,6 +183,8 @@ const productsUrl = computed(() => {
     const cat = getCategoryBySlug(selectedCategorySlug.value)
     if (cat) params.append('category_id', cat.id)
   }
+
+  if (dealsOnly.value) params.append('on_sale', '1')
 
   // Price range - currently backend might not support this directly, but we can pass them
   params.append('min_price', priceRange.value[0])
@@ -235,11 +241,11 @@ const openQuickView = (product) => {
 const getCategoryImageUrl = (imagePath) => {
   if (!imagePath) return 'https://placehold.co/24'
   if (imagePath.startsWith('http')) return imagePath
-  return `http://localhost:8000/storage/${imagePath}`
+  return `${mediaBase}/storage/${imagePath}`
 }
 
 // Ensure filters are reactive and reset page
-watch([selectedCategorySlug, priceRange, sortBy, searchQuery], () => {
+watch([selectedCategorySlug, priceRange, sortBy, searchQuery, dealsOnly], () => {
     currentPage.value = 1
 })
 
@@ -249,7 +255,7 @@ watch(() => route.query.search, (newVal) => {
 })
 
 useHead({
-  title: 'All Products - FGXMART',
+  title: () => dealsOnly.value ? 'Hot Deals - FGXMART' : 'All Products - FGXMART',
   meta: [
     { name: 'description', content: 'Explore our full range of fresh products and daily essentials at FGXMART.' }
   ]
