@@ -50,7 +50,7 @@
   --fgx-purple: #472580;
   --fgx-green: #508c0a;
   --fgx-ink: #211538;
-  font-family: 'Inter', 'Segoe UI', sans-serif;
+  font-family: var(--app-font-family);
 }
 
 [data-theme="fgx"] :focus-visible {

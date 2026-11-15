@@ -38,7 +38,7 @@
 
       <!-- Hover Actions -->
       <div class="hover-overlay d-flex justify-center align-center">
-        <v-btn icon color="white" size="small" variant="flat" elevation="2" class="action-btn" @click.prevent="openQuickView" tabindex="-1">
+        <v-btn icon color="white" size="small" variant="flat" elevation="2" class="action-btn" :aria-label="`Quick view ${product.name}`" @click.prevent="openQuickView">
           <v-icon icon="mdi-eye-outline" size="small" color="grey-darken-3"></v-icon>
         </v-btn>
       </div>
@@ -160,7 +160,7 @@ const openQuickView = () => {
 }
 
 .product-title {
-  font-family: "Trebuchet MS", sans-serif;
+  font-family: var(--app-font-family);
   color: #222;
   transition: color 0.2s;
 }
@@ -185,7 +185,7 @@ const openQuickView = () => {
   gap: 10px;
 }
 
-.product-image-container:hover .hover-overlay {
+.product-image-container:hover .hover-overlay, .hover-overlay:focus-within {
   opacity: 1;
 }
 
@@ -194,7 +194,7 @@ const openQuickView = () => {
   transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
-.product-image-container:hover .action-btn {
+.product-image-container:hover .action-btn, .hover-overlay:focus-within .action-btn {
   transform: translateY(0);
 }
 

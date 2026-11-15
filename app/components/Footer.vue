@@ -13,7 +13,7 @@
         </div>
         <nav v-for="group in linkGroups" :key="group.title" class="footer-column" :aria-label="group.title">
           <h2>{{ group.title }}</h2>
-          <ul><li v-for="link in group.links" :key="link.label"><NuxtLink :to="link.to">{{ link.label }}<ChevronRight :size="15" aria-hidden="true" /></NuxtLink></li></ul>
+          <ul><li v-for="link in group.links" :key="link.label"><NuxtLink :to="link.to">{{ link.label }}</NuxtLink></li></ul>
         </nav>
       </div>
       <div class="footer-bottom">
@@ -29,7 +29,7 @@
 </template>
 
 <script setup>
-import { ChevronRight, FileDown, Mail, MessageCircle, Phone, ShieldCheck } from 'lucide-vue-next'
+import { FileDown, Mail, MessageCircle, Phone, ShieldCheck } from 'lucide-vue-next'
 const config = useRuntimeConfig()
 const year = new Date().getFullYear()
 const [{ data: catRes }, { data: compRes }, { data: pagesRes }] = await Promise.all([
@@ -44,7 +44,7 @@ const linkGroups = computed(() => [
   { title: 'Shop by Category', links: categories.value.length ? categories.value.map(category => ({ label: category.name, to: `/category/${category.slug}` })) : [
     { label: 'Packed Food', to: '/products' }, { label: 'Clothing', to: '/products?search=clothing' }, { label: 'Electronics', to: '/products?search=electronics' }, { label: 'Kitchen Utensils', to: '/products?search=kitchen' },
   ] },
-  { title: 'Quick Links', links: [{ label: 'Home', to: '/' }, { label: 'Shop', to: '/products' }, { label: 'New Arrivals', to: '/#new-arrivals-title' }, { label: 'Best Sellers', to: '/#best-sellers-title' }, { label: 'Track Order', to: '/my-account?tab=order' }] },
+  { title: 'Quick Links', links: [{ label: 'Home', to: '/' }, { label: 'Shop', to: '/products' }, { label: 'New Arrivals', to: '/new-arrivals' }, { label: 'Best Sellers', to: '/best-sellers' }, { label: 'Track Order', to: '/my-account?tab=order' }] },
   { title: 'Customer Support', links: [{ label: 'FAQs & Help', to: '/faqs' }, { label: 'Your Account', to: '/my-account' }, { label: 'Your Enquiry', to: '/cart' }, { label: 'Wishlist', to: '/wishlist' }] },
   { title: 'About FGX MART', links: footerPages.value.length ? footerPages.value.map(page => ({ label: page.title, to: `/${page.slug}` })) : [{ label: 'Shopping Guide', to: '/faqs' }, { label: 'Explore Our Catalogue', to: '/products' }, { label: 'Get Started', to: '/login' }] },
 ])
@@ -52,7 +52,7 @@ const linkGroups = computed(() => [
 
 <style scoped>
 .main-footer { background: radial-gradient(ellipse at 40% -80%, #775299, transparent 75%), linear-gradient(115deg, #3f2869, #29194b); color: #fff; }
-.footer-container { width: min(1440px, 100%); margin-inline: auto; padding: 45px 40px 0; }
+.footer-container { width: min(var(--storefront-container-width), 100%); margin-inline: auto; padding: 45px 40px 0; }
 .footer-top { display: grid; grid-template-columns: 1.45fr 1fr .9fr 1fr 1fr; gap: 35px; padding-bottom: 35px; }
 .footer-intro { padding-right: 24px; border-right: 1px solid rgb(255 255 255 / 13%); }
 .footer-logo { display: inline-block; margin-bottom: 17px; }
@@ -70,6 +70,8 @@ const linkGroups = computed(() => [
 .footer-column svg { flex-shrink: 0; margin-top: 2px; opacity: .7; }
 .footer-column a:hover, .footer-contact a:hover { color: #b3e970; }
 .main-footer a:focus-visible { outline: 2px solid #b3e970; outline-offset: 5px; border-radius: 2px; }
+.main-footer .footer-logo:focus, .main-footer .footer-logo:active { outline: none; border: 0; box-shadow: none; }
+.main-footer .footer-logo:focus-visible { opacity: .8; }
 .footer-bottom { display: flex; align-items: center; justify-content: space-between; gap: 25px; border-top: 1px solid rgb(255 255 255 / 27%); padding-block: 23px; }
 .footer-bottom p { margin: 0; font-size: 12px; color: #e6dff0; }
 .footer-assurances { display: flex; align-items: center; gap: 25px; }

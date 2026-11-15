@@ -42,12 +42,7 @@
               </div>
               <div class="form-group">
                 <label>Menu Position</label>
-                <select v-model="formData.position" class="form-input tw:select">
-                  <option value="none">Nowhere (Hidden)</option>
-                  <option value="header">Header Menu</option>
-                  <option value="footer">Footer Menu</option>
-                  <option value="both">Both Menus</option>
-                </select>
+                <AppSelect v-model="formData.position" :options="[{ id: 'none', name: 'Nowhere (Hidden)' }, { id: 'header', name: 'Header Menu' }, { id: 'footer', name: 'Footer Menu' }, { id: 'both', name: 'Both Menus' }]" aria-label="Menu position" :allow-empty="false" :searchable="false" />
               </div>
               <div class="switch-container">
                 <span class="switch-label">Published Status</span>
@@ -96,10 +91,7 @@
                   <div class="block-type">
                     <GripVertical class="drag-handle" />
                     <span class="index">#{{ index + 1 }}</span>
-                    <select v-model="block.type" class="type-select tw:select">
-                      <option value="HeroSection">Hero Section</option>
-                      <option value="RichText">Rich Text Content</option>
-                    </select>
+                    <AppSelect v-model="block.type" :options="[{ id: 'HeroSection', name: 'Hero Section' }, { id: 'RichText', name: 'Rich Text Content' }]" aria-label="Content block type" :allow-empty="false" :searchable="false" />
                   </div>
                   <button class="btn-icon delete tw:btn tw:btn-sm tw:btn-ghost tw:btn-square" @click="removeBlock(index)">
                     <Trash2 class="icon" />

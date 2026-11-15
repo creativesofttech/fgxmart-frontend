@@ -393,13 +393,7 @@
                           ></v-text-field>
                         </v-col>
                         <v-col cols="12" md="6">
-                          <v-select
-                            v-model="addressForm.type"
-                            :items="['Home', 'Office', 'Other']"
-                            label="Address Type"
-                            variant="outlined"
-                            rounded="lg"
-                          ></v-select>
+                          <AppSelect v-model="addressForm.type" :options="['Home', 'Office', 'Other']" label="Address Type" :allow-empty="false" :searchable="false" />
                         </v-col>
                         <v-col cols="12" md="6">
                            <v-text-field

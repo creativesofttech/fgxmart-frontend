@@ -1,15 +1,32 @@
 :root {
+    --app-font-family: 'Poppins', sans-serif;
+    --tw-font-sans: var(--app-font-family);
+    --storefront-container-width: 1920px;
     --theme-blue: #393185;
     --theme-green: #087637;
     --theme-white: #ffffff;
 }
 
 body {
-    font-family: "Trebuchet MS", sans-serif;
+    font-family: var(--app-font-family);
     color: #4a5568;
 }
 
 .custom-container {
-    max-width: 1600px !important;
+    max-width: var(--storefront-container-width) !important;
     margin: 0 auto;
+}
+
+html, body, #__nuxt, .v-application, .v-overlay {
+    font-family: var(--app-font-family);
+}
+
+button, input, textarea, select, option, optgroup {
+    font-family: inherit;
+}
+
+/* Vuetify typography utilities otherwise restore Roboto at each breakpoint. */
+:is(.v-application, .v-overlay, [data-theme="fgx"]) [class*="text-"],
+.v-badge__badge, .v-kbd, code, pre, kbd, samp {
+    font-family: var(--app-font-family) !important;
 }

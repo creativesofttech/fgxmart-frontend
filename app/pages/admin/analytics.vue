@@ -152,6 +152,7 @@ import {
   ArcElement
 } from 'chart.js'
 import { Line, Doughnut } from 'vue-chartjs'
+ChartJS.defaults.font.family = 'Poppins, sans-serif'
 ChartJS.register(
   Title, Tooltip, Legend, LineElement, LinearScale, PointElement, CategoryScale, ArcElement
 )
@@ -258,7 +259,7 @@ const getStatusClass = (status) => {
   background-color: var(--color-base-200); /* Slate 900 equivalent deep dark */
   min-height: 100vh;
   padding: 2.5rem;
-  font-family: "Inter", system-ui, sans-serif;
+  font-family: var(--app-font-family);
 }
 .analytics-wrapper .metric-card {
   background: var(--color-base-200);

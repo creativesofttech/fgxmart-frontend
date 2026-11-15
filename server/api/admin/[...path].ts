@@ -1,7 +1,7 @@
 import { createError, defineEventHandler, getHeader, getQuery, getRouterParam, readRawBody } from 'h3'
 import { adminBackendRequest, adminSessionToken } from '../../utils/admin-session'
 
-const resources = new Set(['dashboard', 'roles', 'permissions', 'categories', 'brands', 'attributes', 'countries', 'products', 'bank-accounts', 'company-settings', 'orders', 'faqs', 'pages', 'media'])
+const resources = new Set(['dashboard', 'roles', 'permissions', 'categories', 'brands', 'attributes', 'countries', 'zipcodes', 'products', 'bank-accounts', 'company-settings', 'orders', 'faqs', 'pages', 'media'])
 
 export default defineEventHandler(async (event) => {
   const path = getRouterParam(event, 'path') || ''

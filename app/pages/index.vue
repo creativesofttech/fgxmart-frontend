@@ -5,6 +5,7 @@
       <HomeCategories />
       <HomeFeaturedProducts />
       <HomePromoCards />
+      <HomeProductCollection kind="hot-deals" title="Hot Deals" />
       <HomeProductCollection kind="new-arrivals" title="New Arrivals" />
       <HomeProductCollection kind="best-sellers" title="Best Sellers" />
       <HomeBrands />
@@ -32,7 +33,7 @@ useHead({
 
 <style scoped>
 .home-page { width: 100%; }
-.home-content { width: min(1440px, 100%); padding-inline: 40px; margin-inline: auto; padding-bottom: 52px; }
+.home-content { width: min(var(--storefront-container-width), 100%); padding-inline: 40px; margin-inline: auto; padding-bottom: 52px; }
 @media (max-width: 1100px) { .home-content { padding-inline: 24px; } }
 @media (max-width: 760px) { .home-content { padding-inline: 16px; } }
 @media (max-width: 1100px) { .home-content { padding-bottom: 40px; } }

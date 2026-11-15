@@ -30,7 +30,7 @@ import { ArrowRight, FileDown, MessageCircle, PackageCheck, ShoppingCart } from 
 .shopping-cta::before, .shopping-cta::after { content: ''; position: absolute; z-index: -1; bottom: -130px; width: 380px; height: 210px; border-radius: 50%; background: linear-gradient(135deg, #d4bcfb, #eee5fd); }
 .shopping-cta::before { left: -210px; transform: rotate(35deg); }
 .shopping-cta::after { right: -220px; transform: rotate(-35deg); }
-.cta-container { width: min(1440px, 100%); margin-inline: auto; padding: 26px 40px; display: grid; grid-template-columns: 190px 1.2fr 1fr; align-items: center; gap: 30px; min-height: 230px; }
+.cta-container { width: min(var(--storefront-container-width), 100%); margin-inline: auto; padding: 26px 40px; display: grid; grid-template-columns: 190px 1.2fr 1fr; align-items: center; gap: 30px; min-height: 230px; }
 .cta-art { display: block; width: 190px; height: 190px; object-fit: contain; }
 .cta-copy h2 { font-size: clamp(25px, 2.5vw, 36px); font-weight: 800; letter-spacing: -1.1px; line-height: 1.2; margin: 0 0 19px; }
 .cta-copy h2 span { position: relative; white-space: nowrap; }

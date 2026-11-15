@@ -99,12 +99,12 @@ const [categories, { data: pagesResponse }] = await Promise.all([
 const headerPages = computed(() => (pagesResponse.value?.data || []).filter(page => page.status !== false && ['header', 'both'].includes(page.position)).slice(0, 2))
 const shoppingLinks = [
   { label: 'Hot Deals', to: '/products?deals=1' },
-  { label: 'New Arrivals', to: '/#new-arrivals-title' },
-  { label: 'Best Sellers', to: '/#best-sellers-title' },
+  { label: 'New Arrivals', to: '/new-arrivals' },
+  { label: 'Best Sellers', to: '/best-sellers' },
 ]
 const isShoppingLinkActive = link => link.label === 'Hot Deals'
   ? route.path === '/products' && route.query.deals === '1'
-  : route.path === '/' && route.hash === link.to.slice(1)
+  : route.path === link.to
 const filteredCountries = computed(() => countries.value.filter(country => country.name.toLowerCase().includes(countrySearch.value.trim().toLowerCase())))
 
 watch(() => route.query.search, value => { searchQuery.value = typeof value === 'string' ? value : '' }, { immediate: true })
@@ -143,7 +143,7 @@ onMounted(() => {
 
 <style scoped>
 .storefront-header { position: relative; z-index: 30; color: #241736; background: white; }
-.header-container { max-width: 1440px; margin: 0 auto; padding-inline: 40px; }
+.header-container { max-width: var(--storefront-container-width); margin: 0 auto; padding-inline: 40px; }
 .storefront-topbar { min-height: 34px; background: linear-gradient(105deg, #3c216d, #512e89); color: #fff; }
 .topbar-inner { min-height: 34px; display: flex; justify-content: space-between; align-items: center; gap: 20px; font-size: 11px; font-weight: 450; letter-spacing: .1px; }
 .topbar-inner p, .topbar-inner a { display: flex; align-items: center; gap: 8px; margin: 0; }
@@ -152,6 +152,8 @@ onMounted(() => {
 .sticky-wrapper { background: rgb(255 255 255 / 98%); border-bottom: 1px solid #eeeaf3; }
 .main-header { display: grid; grid-template-columns: 173px 148px minmax(200px, 1fr) auto; align-items: center; gap: 22px; min-height: 89px; }
 .brand-link { display: flex; align-items: center; }
+.brand-link:focus, .brand-link:active { outline: none; border: 0; box-shadow: none; }
+.brand-link:focus-visible { opacity: .8; }
 .brand-link img { display: block; width: 173px; height: auto; }
 .location-trigger { display: flex; align-items: center; gap: 8px; text-align: left; border: 1px solid #e8e3ed; border-radius: 8px; padding: 8px 9px; color: #332344; min-width: 0; background: #fff; }
 .location-trigger span { min-width: 0; flex: 1; }
@@ -174,7 +176,9 @@ onMounted(() => {
 .primary-nav { display: flex; align-items: stretch; gap: 30px; min-width: 0; align-self: stretch; }
 .primary-nav a { display: flex; align-items: center; position: relative; white-space: nowrap; color: #30213f; font-size: 12px; font-weight: 600; }
 .primary-nav .nav-active { color: #472580; }
-.nav-active::after { content: ''; position: absolute; height: 2px; background: #7651aa; bottom: 9px; left: 0; right: 0; border-radius: 3px; }
+.primary-nav a:focus, .primary-nav a:active { outline: none; box-shadow: none; border: 0; }
+.primary-nav a:focus-visible { color: #472580; }
+.nav-active::after, .primary-nav a:focus-visible::after { content: ''; position: absolute; height: 2px; background: #7651aa; bottom: 9px; left: 0; right: 0; border-radius: 3px; }
 .mobile-location { display: none; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 .location-modal::backdrop { background: rgb(28 16 46 / 40%); backdrop-filter: blur(3px); }

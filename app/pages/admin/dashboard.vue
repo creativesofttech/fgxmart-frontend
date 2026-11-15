@@ -1,6 +1,6 @@
 ﻿<template>
   <div class="dashboard-page" :aria-busy="pending">
-    <div class="dashboard-heading"><div><h1>Welcome back, {{ admin.user.value?.name || 'Administrator' }} <span aria-hidden="true">👋</span></h1><p>Here’s what’s happening with your store today.</p></div><label class="period-control"><CalendarDays :size="17" aria-hidden="true" /><span class="sr-only">Dashboard period</span><select v-model.number="days" class="tw:select" aria-label="Dashboard period"><option :value="7">Last 7 days</option><option :value="30">Last 30 days</option><option :value="90">Last 90 days</option></select></label></div>
+    <div class="dashboard-heading"><div><h1>Welcome back, {{ admin.user.value?.name || 'Administrator' }} <span aria-hidden="true">👋</span></h1><p>Here’s what’s happening with your store today.</p></div><label class="period-control"><CalendarDays :size="17" aria-hidden="true" /><span class="sr-only">Dashboard period</span><AppSelect v-model="days" :options="[7, 30, 90].map(id => ({ id, name: `Last ${id} days` }))" aria-label="Dashboard period" :allow-empty="false" :searchable="false" /></label></div>
     <div v-if="pending && !dashboard" class="metric-grid" aria-label="Loading dashboard"><div v-for="i in 4" :key="i" class="tw:skeleton metric-skeleton" /></div>
     <div v-else-if="error" class="tw:alert tw:alert-error dashboard-error" role="alert"><AlertCircle :size="20" aria-hidden="true" /><span>We couldn’t load the dashboard. Please try again.</span><button type="button" class="tw:btn tw:btn-sm" @click="refresh">Retry</button></div>
     <template v-else-if="dashboard">
@@ -26,6 +26,7 @@
 import { ArrowDown, ArrowRight, ArrowUp, AlertCircle, CalendarDays, ChartNoAxesCombined, ClipboardList, Coins, ListOrdered, Minus, Package, ShoppingCart, Trophy, UserRound, UsersRound } from 'lucide-vue-next'
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Tooltip, Legend, Filler } from 'chart.js'
 import { Line, Doughnut } from 'vue-chartjs'
+ChartJS.defaults.font.family = 'Poppins, sans-serif'
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Tooltip, Legend, Filler)
 definePageMeta({ layout: 'admin' })
 useHead({ title: 'Dashboard — FGX MART Admin' })
@@ -68,7 +69,7 @@ const imageFallback = event => { if (!event.target.dataset.fallback) { event.tar
 .dashboard-heading h1 span { font-size: .8em; white-space: nowrap; }
 .dashboard-heading p { margin: 0; font-size: 13px; color: #8e7f9b; }
 .period-control { display: flex; align-items: center; gap: 9px; padding-left: 13px; background: #fff; border: 1px solid #dcd0ed; border-radius: 10px; color: #8d69b4; flex-shrink: 0; }
-.period-control .tw\:select { min-height: 40px; height: 40px; width: 141px; padding-left: 0; border: 0; background-color: transparent; font-size: 12px; color: #57416e; box-shadow: none; }
+.period-control :deep(.select-trigger) { min-height: 40px; height: 40px; width: 141px; padding-left: 0; border: 0; background-color: transparent; font-size: 12px; color: #57416e; box-shadow: none; }
 .metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; }
 .metric-skeleton { min-height: 140px; background: #eee8f5; border-radius: 17px; }
 .metric-card { --metric-color: #8254c5; --metric-tint: #f0e8fc; display: flex; flex-direction: row; align-items: flex-start; gap: 14px; min-width: 0; min-height: 145px; padding: 22px 19px 25px; border: 1px solid #f1edf6; border-radius: 17px; background: #fff; box-shadow: 0 5px 16px #39205604; overflow: hidden; position: relative; }

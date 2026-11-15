@@ -51,7 +51,7 @@ onUnmounted(() => scope?.revert())
 
 <style scoped>
 .home-hero { position: relative; isolation: isolate; width: 100%; overflow: hidden; background: #f1f0f7; }
-.hero-container { display: grid; grid-template-columns: 1fr 1.1fr; width: min(1440px, 100%); min-height: 450px; margin-inline: auto; padding-inline: 40px; }
+.hero-container { display: grid; grid-template-columns: 1fr 1.1fr; width: min(var(--storefront-container-width), 100%); min-height: 450px; margin-inline: auto; padding-inline: 40px; }
 .hero-art { position: absolute; inset: 0 0 0 22%; z-index: -2; }
 .hero-art img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: right center; }
 .hero-blend { position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, #f2f1f8 0%, rgb(242 241 248 / 98%) 27%, rgb(242 241 248 / 91%) 36%, rgb(242 241 248 / 38%) 48%, transparent 61%); }

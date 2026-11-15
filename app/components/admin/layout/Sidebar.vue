@@ -29,6 +29,7 @@ import {
   Grid,
   List,
   Globe,
+  MapPin,
   Tag,
   Building,
   HelpCircle,
@@ -41,7 +42,7 @@ const props = defineProps({
     default: false
   }
 })
-const openSubmenus = ref(['Core Settings', 'Product Settings', 'Manage Products'])
+const openSubmenus = ref([])
 const menuItems = [
   {
     label: 'Dashboard',
@@ -115,6 +116,11 @@ const menuItems = [
         icon: Globe
       },
       {
+        label: 'Zipcodes',
+        path: '/admin/zipcodes',
+        icon: MapPin
+      },
+      {
         label: 'Company Details',
         path: '/admin/company-settings',
         icon: Building
@@ -165,6 +171,7 @@ const toggleSubmenu = (label) => {
 .chevron { width: 15px; margin-left: auto; }
 .chevron.rotate { transform: rotate(180deg); }
 .submenu { margin: 3px 0 7px 8px; }
+.submenu::before { display: none; }
 .collapsed .submenu { margin-left: 0; padding-left: 0; border: 0; }
 .collapsed .nav-item { justify-content: center; padding-inline: 10px; }
 @media(prefers-reduced-motion: reduce) { .sidebar { transition: none; } }

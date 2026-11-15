@@ -2,7 +2,7 @@
   <section class="product-collection" :aria-labelledby="`${kind}-title`">
     <div class="collection-heading">
       <h2 :id="`${kind}-title`">{{ title }}</h2>
-      <NuxtLink class="view-all" to="/products">View all <ArrowRight :size="16" aria-hidden="true" /></NuxtLink>
+      <NuxtLink class="view-all" :to="viewAllLink">View all <ArrowRight :size="16" aria-hidden="true" /></NuxtLink>
     </div>
     <div v-if="pending" class="collection-grid" aria-busy="true" :aria-label="`Loading ${title}`">
       <div v-for="index in 6" :key="index" class="tw:skeleton collection-skeleton" />
@@ -12,19 +12,14 @@
       <button class="tw:btn tw:btn-outline tw:btn-primary tw:btn-sm" type="button" @click="refresh">Try again</button>
     </div>
     <template v-else>
-      <p v-if="!products.length" class="collection-note">{{ kind === 'new-arrivals' ? 'Fresh finds are on their way.' : 'Our bestseller selection is coming soon.' }}</p>
+      <p v-if="!products.length" class="collection-note">No {{ title.toLowerCase() }} available yet.</p>
       <div class="collection-grid">
         <motion.article v-for="(item, index) in cards" :key="item.id || index" class="tw:card collection-card" :while-hover="{ y: -3 }">
-          <NuxtLink v-if="item.id" :to="`/products/${item.slug}`" class="collection-link">
-            <div class="collection-visual"><img src="/assets/images/home/product-placeholder.webp" :alt="`${item.name} — product image coming soon`" width="960" height="533" loading="lazy" decoding="async" /></div>
+          <NuxtLink :to="`/products/${item.slug}`" class="collection-link">
+            <div class="collection-visual"><ProductImage :product="item" /></div>
             <h3>{{ item.name }}</h3>
             <span class="collection-detail">Explore product <ArrowUpRight :size="13" aria-hidden="true" /></span>
           </NuxtLink>
-          <template v-else>
-            <div class="collection-visual"><img src="/assets/images/home/product-placeholder.webp" alt="Product image coming soon" width="960" height="533" loading="lazy" decoding="async" /></div>
-            <h3>{{ item.name }}</h3>
-            <span class="collection-detail preview-detail">Coming soon</span>
-          </template>
         </motion.article>
       </div>
     </template>
@@ -37,16 +32,14 @@ import { ArrowRight, ArrowUpRight } from 'lucide-vue-next'
 
 const props = defineProps({ kind: { type: String, required: true }, title: { type: String, required: true } })
 const config = useRuntimeConfig()
-// Best Sellers remains a design preview until a sales ranking is available.
+const filter = { 'new-arrivals': 'is_new_arrival', 'best-sellers': 'is_best_seller', 'hot-deals': 'is_hot_deal' }[props.kind]
+const viewAllLink = computed(() => props.kind === 'hot-deals' ? '/products?deals=1' : `/${props.kind}`)
 const { data: products, pending, error, refresh } = await useAsyncData(`home-${props.kind}`, async () => {
-  if (props.kind !== 'new-arrivals') return []
-  const response = await $fetch(`${config.public.apiBase}/products`, { query: { per_page: 6 } })
+  if (!filter) return []
+  const response = await $fetch(`${config.public.apiBase}/products`, { query: { per_page: 6, [filter]: 1 } })
   return (response.data || []).filter(product => product.status !== false).slice(0, 6)
 }, { default: () => [] })
-const previewNames = props.kind === 'new-arrivals'
-  ? ['Everyday audio', 'Fresh wardrobe finds', 'Smart accessories', 'Kitchen favourites', 'Style for every day', 'Pantry discoveries']
-  : ['Pantry essentials', 'Everyday denim', 'Connected living', 'Cookware classics', 'Audio favourites', 'Kitchen upgrades']
-const cards = computed(() => products.value.length ? products.value : previewNames.map(name => ({ name })))
+const cards = computed(() => products.value)
 </script>
 
 <style scoped>
@@ -63,7 +56,6 @@ h2::after { content: ''; position: absolute; left: 0; bottom: 0; width: 43px; he
 .collection-visual img { display: block; width: 100%; height: 100%; object-fit: contain; }
 h3 { color: #352344; font-size: 12px; line-height: 1.5; font-weight: 650; margin: 11px 4px 7px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .collection-detail { display: flex; align-items: center; gap: 5px; color: #684191; font-size: 10px; margin: auto 4px 0; padding-top: 2px; }
-.preview-detail { color: #9a89a8; }
 .collection-note { font-size: 11px; color: #93879e; margin: -4px 0 14px; }
 .collection-skeleton { min-height: 190px; background: #f1edf6; border-radius: 13px; }
 .collection-error { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 16px; min-height: 150px; border: 1px dashed #dfd4eb; border-radius: 13px; color: #8b769d; font-size: 13px; }

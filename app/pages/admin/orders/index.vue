@@ -33,7 +33,7 @@
 
         <!-- Filter Dropdown -->
         <div class="filter-group">
-          <select v-model="statusFilter" class="tw:select" aria-label="Filter orders by status"><option v-for="opt in statusOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option></select>
+          <AppSelect v-model="statusFilter" :options="statusOptions" label-key="label" value-key="value" aria-label="Filter orders by status" :allow-empty="false" :searchable="false" />
         </div>
       </div>
       <!-- Table -->
@@ -115,10 +115,10 @@
     <!-- Quick Edit Status Modal -->
     <Modal v-model="showEditModal" title="Update Order Status" width="560px" :close-disabled="updating"><!-- Order Status --><div class="form-group tw:mb-4">
               <label class="premium-label tw:mb-4 block">Order Lifecycle Status</label>
-              <select v-model="editForm.status" class="tw:select" aria-label="Order Status"><option v-for="opt in orderStatusOptions" :key="opt" :value="opt">{{ opt }}</option></select>
+              <AppSelect v-model="editForm.status" :options="orderStatusOptions.map(id => ({ id, name: id.charAt(0).toUpperCase() + id.slice(1) }))" aria-label="Order Status" :allow-empty="false" :searchable="false" />
             </div><!-- Payment Status --><div class="form-group tw:mb-4">
               <label class="premium-label tw:mb-4 block">Payment Workflow</label>
-              <select v-model="editForm.payment_status" class="tw:select" aria-label="Payment Status"><option v-for="opt in paymentStatusOptions" :key="opt" :value="opt">{{ opt }}</option></select>
+              <AppSelect v-model="editForm.payment_status" :options="paymentStatusOptions.map(id => ({ id, name: id.charAt(0).toUpperCase() + id.slice(1) }))" aria-label="Payment Status" :allow-empty="false" :searchable="false" />
             </div><!-- Notes --><div class="form-group tw:mb-4">
               <label class="premium-label tw:mb-4 block">Internal Adjustment Notes <small class="tw:text-base-content/60 lowercase tw:ml-2">(Audit Visible)</small></label>
               <div class="textarea-wrapper">
@@ -264,7 +264,7 @@ onMounted(() => {
 </script>
 <style scoped>
 .orders-page {
-  font-family: "Inter", sans-serif;
+  font-family: var(--app-font-family);
 }
 .orders-page .mb-4 {
   margin-bottom: 1rem;

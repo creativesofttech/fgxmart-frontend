@@ -23,30 +23,32 @@
             </div>
             <div class="row">
               <div class="form-group col">
-                <label>SKU (Auto-generated)</label>
-                <input v-model="formData.sku" type="text" class="form-input tw:input" placeholder="e.g. FD-ALM-200-001">
+                <label for="product-sku">SKU (Auto-generated)</label>
+                <input id="product-sku" v-model="formData.sku" type="text" class="form-input tw:input" placeholder="e.g. FD-ALM-200-001">
               </div>
               <div class="form-group col">
-                <label>Weight / Volume (for SKU)</label>
-                <input v-model="formData.variation_code" type="text" class="form-input tw:input" placeholder="e.g. 200, 1KG">
+                <label for="product-hsn">HSN Code (Optional)</label>
+                <input id="product-hsn" v-model="formData.hsn_code" type="text" maxlength="20" class="form-input tw:input" placeholder="Enter HSN code">
               </div>
             </div>
             <div class="row">
               <div class="form-group col">
-                <label>Category</label>
-                <CustomSelect
-                  v-model="formData.category_id"
-                  :options="categories"
-                  placeholder="Select Category"
-                />
+                <label>Main Category</label>
+                <AppSelect v-model="mainCategoryId" :options="mainCategories" aria-label="Main Category" placeholder="Select Main Category" />
               </div>
               <div class="form-group col">
+                <label>Sub Category</label>
+                <AppSelect v-model="subCategoryId" :options="subCategories" aria-label="Sub Category" :disabled="!subCategories.length" :placeholder="!mainCategoryId ? 'Select main category first' : subCategories.length ? 'Select Sub Category' : 'No subcategories available'" />
+              </div>
+            </div>
+            <div class="row">
+              <div class="form-group col">
                 <label>Brand</label>
-                <CustomSelect
-                  v-model="formData.brand_id"
-                  :options="brands"
-                  placeholder="Select Brand"
-                />
+                <AppSelect v-model="formData.brand_id" :options="brands" placeholder="Select Brand" />
+              </div>
+              <div class="form-group col">
+                <label for="product-weight">Weight / Volume (for SKU)</label>
+                <input id="product-weight" v-model="formData.variation_code" type="text" maxlength="20" class="form-input tw:input" placeholder="e.g. 200, 1KG">
               </div>
             </div>
             <div class="form-group">
@@ -55,20 +57,7 @@
             </div>
             <div class="form-group">
               <label>Description</label>
-              <div class="rich-editor">
-                <div class="editor-toolbar">
-                  <button class="tw:btn tw:btn-sm tw:btn-ghost" type="button" @click="execCommand('bold')"><Bold class="ti-icon"/></button>
-                  <button class="tw:btn tw:btn-sm tw:btn-ghost" type="button" @click="execCommand('italic')"><Italic class="ti-icon"/></button>
-                  <button class="tw:btn tw:btn-sm tw:btn-ghost" type="button" @click="execCommand('insertUnorderedList')"><List class="ti-icon"/></button>
-                  <button class="tw:btn tw:btn-sm tw:btn-ghost" type="button" @click="execCommand('insertOrderedList')"><ListOrdered class="ti-icon"/></button>
-                </div>
-                <div
-                  ref="descriptionBox"
-                  contenteditable="true"
-                  class="editor-content"
-                  @input="updateDescription"
-                ></div>
-              </div>
+              <AdminUiRichTextEditor v-model="formData.description" label="Description" />
             </div>
           </div>
         </div>
@@ -169,14 +158,7 @@
 
                 <div class="form-group tw:mb-2">
                   <label>Attribute Value</label>
-                  <select v-model="item.attribute_value_id" class="form-input tw:select">
-                    <option :value="null">Select Value</option>
-                    <optgroup v-for="attr in attributes" :key="attr.id" :label="attr.name">
-                      <option v-for="val in attr.values" :key="val.id" :value="val.id">
-                        {{ val.value }}
-                      </option>
-                    </optgroup>
-                  </select>
+                  <AppSelect v-model="item.attribute_value_id" :options="attributes.flatMap(attribute => attribute.values.map(value => ({ id: value.id, name: value.value, group: attribute.name })))" aria-label="Attribute value" placeholder="Select Value" />
                 </div>
                 <div class="row small-gap">
                   <div class="form-group col tw:mb-0">
@@ -207,7 +189,6 @@
                 <div v-for="country in countries" :key="country.id" class="checkbox-item">
                   <label class="checkbox-container">
                     <input class="tw:checkbox tw:checkbox-primary" type="checkbox" :value="country.id" v-model="formData.countries">
-                    <span class="checkmark"></span>
                     <span class="label-text">{{ country.name }} ({{ country.code }})</span>
                   </label>
                 </div>
@@ -229,6 +210,7 @@
             </div>
           </div>
         </div>
+        <AdminProductsHomepageSettings :model-value="formData" @update:model-value="Object.assign(formData, $event)" />
       </div>
     </div>
   </div>
@@ -237,23 +219,19 @@
 definePageMeta({ layout: "admin" })
 import { ref, reactive, watch, onMounted } from 'vue'
 import {
-  Bold,
-  Italic,
-  List,
-  ListOrdered,
   Plus,
   Trash2,
   Upload,
   ArrowLeft,
   ArrowRight
 } from 'lucide-vue-next'
-import CustomSelect from '~/components/admin/ui/CustomSelect.vue'
 import { useAdminToast } from '~/composables/useAdminToast'
 const formData = reactive({
   name: '',
   category_id: null,
   brand_id: null,
   sku: '',
+  hsn_code: '',
   variation_code: '',
   summary: '',
   description: '',
@@ -262,6 +240,9 @@ const formData = reactive({
   stock_quantity: 0,
   status: true,
   is_featured: false,
+  is_hot_deal: false,
+  is_new_arrival: false,
+  is_best_seller: false,
   countries: []
 })
 const { success, error: toastError } = useAdminToast()
@@ -272,7 +253,7 @@ const brands = ref([])
 const countries = ref([])
 const attributes = ref([])
 const productAttributes = ref([])
-const descriptionBox = ref(null)
+const { mainCategoryId, subCategoryId, mainCategories, subCategories, initializeCategory } = useProductCategorySelection(formData, categories)
 // SKU Auto-generation logic
 watch([() => formData.category_id, () => formData.name, () => formData.variation_code], async ([catId, name, variation]) => {
   if (catId && name && name.length >= 3) {
@@ -348,12 +329,6 @@ const moveImage = (index, direction) => {
   gallery.value[index] = gallery.value[newIndex]
   gallery.value[newIndex] = temp
 }
-const execCommand = (command) => {
-  document.execCommand(command, false, null)
-}
-const updateDescription = () => {
-  formData.description = descriptionBox.value.innerHTML
-}
 const handleSave = async () => {
   if (!formData.name) {
     toastError('Product name is required')
@@ -366,6 +341,10 @@ const handleSave = async () => {
     fd.append('category_id', formData.category_id || '')
     fd.append('brand_id', formData.brand_id || '')
     fd.append('sku', formData.sku || '')
+    fd.append('hsn_code', formData.hsn_code.trim())
+    fd.append('main_category_id', mainCategoryId.value || '')
+    fd.append('sub_category_id', subCategoryId.value || '')
+    fd.append('variation_code', formData.variation_code || '')
     fd.append('summary', formData.summary || '')
     fd.append('description', formData.description || '')
     fd.append('base_price', formData.base_price)
@@ -373,6 +352,7 @@ const handleSave = async () => {
     fd.append('stock_quantity', formData.stock_quantity)
     fd.append('status', formData.status ? '1' : '0')
     fd.append('is_featured', formData.is_featured ? '1' : '0')
+    for (const flag of ['is_hot_deal', 'is_new_arrival', 'is_best_seller']) fd.append(flag, formData[flag] ? '1' : '0')
     formData.countries.forEach(id => {
       fd.append('countries[]', id)
     })
@@ -518,39 +498,6 @@ textarea.form-input {
   flex: 1;
 }
 
-.rich-editor {
-  border: 1px solid rgb(71 37 128 / 10%);
-  border-radius: 0.5rem;
-  background-color: var(--color-base-200);
-  overflow: hidden;
-}
-.rich-editor .editor-toolbar {
-  padding: 0.5rem;
-  background-color: rgb(71 37 128 / 10%);
-  border-bottom: 1px solid rgb(71 37 128 / 10%);
-  display: flex;
-  gap: 0.25rem;
-}
-.rich-editor .editor-toolbar button {
-  transition: all 0.2s;
-}
-.rich-editor .editor-toolbar button:hover {
-}
-.rich-editor .editor-toolbar button .ti-icon {
-  width: 16px;
-}
-.rich-editor .editor-content {
-  padding: 1rem;
-  min-height: 200px;
-  color: var(--color-base-content);
-  font-size: 0.9375rem;
-  outline: none;
-}
-.rich-editor .editor-content:empty:before {
-  content: "Start writing...";
-  color: #475569;
-}
-
 .upload-placeholder {
   border: 2px dashed rgb(71 37 128 / 10%);
   border-radius: 0.75rem;
@@ -678,48 +625,17 @@ textarea.form-input {
   margin-bottom: 0.5rem;
 }
 
-.checkbox-container {
+.form-group .checkbox-container {
   display: flex;
   align-items: center;
-  position: relative;
-  padding-left: 30px;
+  gap: 12px;
   cursor: pointer;
   font-size: 0.875rem;
   user-select: none;
   color: #80718d;
 }
 .checkbox-container input {
-  position: absolute;
-  width: 0;
-}
-.checkbox-container input:checked ~ .checkmark {
-}
-.checkbox-container input:checked ~ .checkmark:after {
-  display: block;
-}
-.checkbox-container .checkmark {
-  position: absolute;
-  top: 0;
-  left: 0;
-  height: 18px;
-  width: 18px;
-  background-color: var(--color-base-100);
-  border: 1px solid rgb(71 37 128 / 10%);
-  border-radius: 4px;
-}
-.checkbox-container .checkmark:after {
-  content: "";
-  position: absolute;
-  display: none;
-  left: 6px;
-  top: 2px;
-  width: 5px;
-  height: 10px;
-  border: solid white;
-  border-width: 0 2px 2px 0;
-  transform: rotate(45deg);
-}
-.checkbox-container:hover input ~ .checkmark {
+  flex-shrink: 0;
 }
 
 .switch-container {

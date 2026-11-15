@@ -99,9 +99,7 @@
             </div>
 
             <!-- Description -->
-            <p class="text-body-1 text-grey-darken-1 mb-6" style="line-height: 1.6; max-width: 600px;">
-                {{ product.description || product.summary || 'No description available for this product.' }}
-            </p>
+            <ProductRichDescription :html="product.description || product.summary" class="text-body-1 text-grey-darken-1 mb-6" style="max-width: 600px;" />
 
             <v-divider class="mb-6"></v-divider>
 
@@ -210,11 +208,7 @@
              <v-card class="mb-6 rounded-lg" elevation="0" border>
                  <v-card-title class="font-weight-bold text-h6 px-6 pt-6">Description</v-card-title>
                  <v-card-text class="px-6 pb-6 text-body-1 text-grey-darken-1" style="line-height: 1.8;">
-                     {{ product.description || product.summary || 'No description available.' }}
-                     <br><br>
-                     <p>
-                        Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
-                     </p>
+                     <ProductRichDescription :html="product.description || product.summary" />
                  </v-card-text>
              </v-card>
 

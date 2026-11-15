@@ -5,7 +5,7 @@ export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: process.env.NODE_ENV !== 'production' },
   srcDir: 'app',
-  css: ['~/assets/css/ui.css', '~/assets/css/theme.css', '~/assets/css/admin.scss'],
+  css: ['@fontsource/poppins/latin.css', '@fontsource/poppins/latin-italic.css', '~/assets/css/ui.css', '~/assets/css/theme.css', '~/assets/css/admin.scss'],
   modules: [
     '@pinia/nuxt',
     'nuxt-gtag',

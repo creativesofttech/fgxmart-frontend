@@ -23,7 +23,7 @@ import StorefrontHeader from '~/components/layout/StorefrontHeader.vue'
 }
 
 body {
-  font-family: "Trebuchet MS", sans-serif;
+  font-family: var(--app-font-family);
   color: #4a5568;
   line-height: 1.5;
   background-color: #f9f9f9; // Light bg for whole site

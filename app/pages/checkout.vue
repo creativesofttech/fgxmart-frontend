@@ -102,29 +102,10 @@
                         ></v-text-field>
                       </v-col>
                       <v-col cols="12" md="6">
-                        <v-select
-                          v-model="addressForm.type"
-                          :items="['Home', 'Office', 'Other']"
-                          label="Address Type"
-                          variant="outlined"
-                          rounded="lg"
-                          density="comfortable"
-                        ></v-select>
+                        <AppSelect v-model="addressForm.type" :options="['Home', 'Office', 'Other']" label="Address Type" :allow-empty="false" :searchable="false" />
                       </v-col>
                        <v-col cols="12" md="6">
-                        <v-autocomplete
-                          v-model="addressForm.country_id"
-                          :items="countries"
-                          item-title="name"
-                          item-value="id"
-                          label="Country"
-                          placeholder="Search or select country"
-                          variant="outlined"
-                          rounded="lg"
-                          density="comfortable"
-                          :rules="[v => !!v || 'Country is required']"
-                          auto-select-first
-                        ></v-autocomplete>
+                        <AppSelect ref="addressCountrySelect" v-model="addressForm.country_id" :options="countries" label="Country" placeholder="Search or select country" required :allow-empty="false" />
                       </v-col>
                       <v-col cols="12">
                         <v-text-field
@@ -546,7 +527,13 @@ const editAddress = (address) => {
     showAddressForm.value = true
 }
 
+const addressFormRef = ref(null)
+const addressCountrySelect = ref(null)
 const saveAddress = async () => {
+    if (addressLoading.value) return
+    const countryValid = addressCountrySelect.value?.validate() ?? false
+    const { valid } = await addressFormRef.value.validate()
+    if (!valid || !countryValid) return
     addressLoading.value = true
     try {
         if (editingAddressId.value) {

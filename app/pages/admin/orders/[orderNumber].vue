@@ -180,10 +180,10 @@
     <!-- Edit Modal (Re-using logic) -->
     <Modal v-model="showEditModal" title="Update Order Status" width="560px" :close-disabled="updating"><div class="form-group tw:mb-6">
               <label class="premium-label tw:mb-4 block">Order Lifecycle</label>
-              <select v-model="editForm.status" class="tw:select" aria-label="Order Status"><option v-for="opt in orderStatusOptions" :key="opt" :value="opt">{{ opt }}</option></select>
+              <AppSelect v-model="editForm.status" :options="orderStatusOptions.map(id => ({ id, name: id.charAt(0).toUpperCase() + id.slice(1) }))" aria-label="Order Status" :allow-empty="false" :searchable="false" />
             </div><div class="form-group tw:mb-6">
               <label class="premium-label tw:mb-4 block">Payment Status</label>
-              <select v-model="editForm.payment_status" class="tw:select" aria-label="Payment Status"><option v-for="opt in paymentStatusOptions" :key="opt" :value="opt">{{ opt }}</option></select>
+              <AppSelect v-model="editForm.payment_status" :options="paymentStatusOptions.map(id => ({ id, name: id.charAt(0).toUpperCase() + id.slice(1) }))" aria-label="Payment Status" :allow-empty="false" :searchable="false" />
             </div><div class="form-group tw:mb-12">
               <label class="premium-label tw:mb-4 block">Adjustment Notes</label>
               <div class="textarea-wrapper">
@@ -273,7 +273,7 @@ onMounted(() => {
 <style scoped>
 .order-detail-page {
   padding: 1rem;
-  font-family: "Inter", sans-serif;
+  font-family: var(--app-font-family);
 }
 .order-detail-page .mb-4 {
   margin-bottom: 1rem;

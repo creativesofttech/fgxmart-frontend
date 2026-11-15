@@ -8,7 +8,7 @@
         <Heart :size="19" :fill="isWished ? 'currentColor' : 'none'" aria-hidden="true" />
       </button>
       <NuxtLink v-if="product" :to="productLink" class="product-image-link" :aria-label="`View ${product.name}`">
-        <img src="/assets/images/home/product-placeholder.webp" :alt="`${product.name} — product image coming soon`" width="960" height="533" loading="lazy" decoding="async" />
+        <ProductImage :product="product" />
       </NuxtLink>
       <div v-else class="product-image-link"><img src="/assets/images/home/product-placeholder.webp" alt="Product image coming soon" width="960" height="533" loading="lazy" decoding="async" /></div>
     </div>
