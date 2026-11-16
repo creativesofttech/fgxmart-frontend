@@ -20,16 +20,24 @@ The Laravel 13 upgrade also updates Tinker to 3.x and the test suite to Pest 4 /
 
 ## Configure the services
 
-Copy `.env.example` to `.env` for local development. In production, configure environment variables through the hosting platform:
+Copy each service's `.env.example` to `.env` for local development. The frontend defaults to Nuxt at `http://localhost:3000` and Laravel at `http://localhost:8000`; its API setting includes the `/api/v1` prefix. In production, configure the following through the hosting platform:
 
 ```dotenv
 NUXT_PUBLIC_API_BASE=https://api.fgxmart.com/api/v1
 NUXT_API_BASE=https://api.fgxmart.com/api/v1
 ```
 
-`NUXT_PUBLIC_API_BASE` must be reachable by visitors' browsers and is also used to construct media URLs. `NUXT_API_BASE` is server-only and may instead point to an internal Laravel URL. Both values include `/api/v1` and omit `/admin` and the trailing slash. Keep Laravel `APP_URL` set to its public HTTPS origin so generated storage URLs work.
+`NUXT_PUBLIC_API_BASE` must be reachable by visitors' browsers and is also used to construct media URLs. `NUXT_API_BASE` is server-only and may instead point to an internal Laravel URL. Both values include `/api/v1` and omit `/admin` and the trailing slash. Since `apiBase` is public runtime config, provide `NUXT_PUBLIC_API_BASE` to the Nuxt process at runtime (or when building if the deployment platform bakes environment values into its artifact).
 
-Set `FRONTEND_URL=https://fgxmart.com` in Laravel for order-email links. Configure Laravel CORS for the deployed storefront origin if changing domains. The existing `https://fgxmart.com` origin is already allowed. Admin requests travel through Nuxt and do not require browser CORS access to Laravel.
+Set these Laravel production variables so generated storage links and email links use the correct domains:
+
+```dotenv
+APP_URL=https://api.fgxmart.com
+FRONTEND_URL=https://fgxmart.com
+CORS_ALLOWED_ORIGINS=https://fgxmart.com
+```
+
+For local browser development, keep `CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001` (or add the actual Nuxt origin/port). `CORS_ALLOWED_ORIGINS` is a comma-separated list of exact origins, with no trailing slash. Admin requests travel through Nuxt and do not require browser CORS access to Laravel. `SANCTUM_STATEFUL_DOMAINS` is only needed if using Sanctum cookie-based SPA authentication; this app's customer/admin API calls use bearer tokens, so it can remain at its default unless that changes.
 
 ## Apply backend changes first
 

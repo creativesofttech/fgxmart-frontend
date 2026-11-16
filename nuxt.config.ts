@@ -21,7 +21,7 @@ export default defineNuxtConfig({
     // Server-only URL for authenticated admin requests (NUXT_API_BASE).
     apiBase: '',
     public: {
-      apiBase: 'http://localhost:8000/api/v1',
+      apiBase: process.env.NUXT_PUBLIC_API_BASE || 'http://localhost:8000/api/v1',
       gtagId: process.env.GTAG_ID || 'G-XXXXXXXXXX'
     }
   },
