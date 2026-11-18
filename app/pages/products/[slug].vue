@@ -1,18 +1,14 @@
 <template>
   <div class="product-detail-page pb-16 custom-container">
-    <!-- Breadcrumb / Header -->
-    <div class="bg-white py-6 mb-8 border-b">
-        <v-container>
-            <div class="d-flex justify-space-between align-center">
-                <h1 class="text-h4 font-weight-bold text-grey-darken-3">{{ product?.name || 'Loading...' }}</h1>
-                <v-breadcrumbs :items="breadcrumbs" class="pa-0">
-                    <template v-slot:divider>
-                        <v-icon icon="mdi-chevron-right"></v-icon>
-                    </template>
-                </v-breadcrumbs>
-            </div>
-        </v-container>
-    </div>
+    <v-container class="product-breadcrumb-container">
+      <nav aria-label="Product breadcrumb" class="product-breadcrumb">
+        <ol>
+          <li><NuxtLink to="/"><House :size="15" aria-hidden="true" /><span>Home</span></NuxtLink></li>
+          <li v-for="category in breadcrumbCategories" :key="category.id"><ChevronRight :size="14" aria-hidden="true" /><NuxtLink :to="`/category/${category.slug}`">{{ category.name }}</NuxtLink></li>
+          <li v-if="product.name" class="breadcrumb-current"><ChevronRight :size="14" aria-hidden="true" /><span aria-current="page">{{ product.name }}</span></li>
+        </ol>
+      </nav>
+    </v-container>
 
     <v-container v-if="pending" class="d-flex justify-center align-center py-16">
         <v-progress-circular indeterminate color="primary" size="64"></v-progress-circular>
@@ -86,17 +82,7 @@
             </div>
              
             <!-- Reviews -->
-            <div class="d-flex align-center mb-6">
-                <v-rating
-                  :model-value="4.5"
-                  color="warning" 
-                  half-increments
-                  density="compact"
-                  size="small"
-                  readonly
-                ></v-rating>
-                <div class="text-body-2 text-grey ml-2">(23 Customer Reviews)</div>
-            </div>
+            <a href="#customer-reviews" class="product-review-link">{{ reviewSummary.count ? `${Number(reviewSummary.average).toFixed(1)} / 5 · ${reviewSummary.count} customer ${reviewSummary.count === 1 ? 'review' : 'reviews'}` : 'No reviews yet · Share your experience' }}</a>
 
             <!-- Description -->
             <ProductRichDescription :html="product.description || product.summary" class="text-body-1 text-grey-darken-1 mb-6" style="max-width: 600px;" />
@@ -201,8 +187,8 @@
 
       <!-- Description & Reviews Section -->
       <v-row class="mt-8">
-         <!-- Right Content (70%) -->
-         <v-col cols="12" md="8" lg="9">
+         <!-- Product description and customer feedback -->
+         <v-col cols="12">
              
              <!-- Description -->
              <v-card class="mb-6 rounded-lg" elevation="0" border>
@@ -212,149 +198,13 @@
                  </v-card-text>
              </v-card>
 
-             <!-- Reviews UI -->
-             <v-card class="rounded-lg" elevation="0" border>
-                 <v-card-text class="pa-6">
-                     <v-row>
-                         <!-- Rating Summary (Left) -->
-                         <v-col cols="12" md="4" class="border-e-md">
-                             <div class="d-flex align-center mb-4">
-                                 <span class="text-h3 font-weight-bold mr-2">3.40</span>
-                                 <v-icon color="warning" icon="mdi-star" size="32"></v-icon>
-                                 <span class="text-body-2 text-grey ml-2">5 Overall Rating</span>
-                             </div>
-
-                             <div class="rating-bars mb-6">
-                                 <div v-for="i in 5" :key="i" class="d-flex align-center mb-1">
-                                     <span class="font-weight-bold mr-2 text-no-wrap" style="width: 30px">{{ 6-i }} ★</span>
-                                     <v-progress-linear 
-                                        :model-value="getRatingPercent(6-i)" 
-                                        :color="getRatingColor(6-i)" 
-                                        height="6" 
-                                        class="rounded-pill mr-2"
-                                     ></v-progress-linear>
-                                     <span class="text-caption text-grey" style="width: 20px">{{ getRatingCount(6-i) }}</span>
-                                 </div>
-                             </div>
-
-                             <div class="text-subtitle-1 font-weight-bold mb-1">Review this product</div>
-                             <p class="text-caption text-grey mb-4">Let other customers know what you think</p>
-                             <v-btn block variant="outlined" color="primary" class="text-none" @click="showReviewDialog = true">Write a review</v-btn>
-                         </v-col>
-
-                         <!-- Review List (Right) -->
-                         <v-col cols="12" md="8">
-                             <div class="reviews-list">
-                                 <div v-for="(review, index) in reviews" :key="index" class="review-item mb-4 pb-4 border-b-sm last-no-border">
-                                     <div class="d-flex justify-space-between align-start mb-2">
-                                         <div class="d-flex">
-                                             <v-avatar size="40" class="mr-3">
-                                                 <v-img :src="review.avatar" :alt="review.name"></v-img>
-                                             </v-avatar>
-                                             <div>
-                                                 <div class="d-flex align-center">
-                                                     <span class="font-weight-bold text-body-2 mr-2">{{ review.name }}</span>
-                                                     <span class="text-caption text-grey">{{ review.date }}</span>
-                                                 </div>
-                                                 <v-rating 
-                                                    :model-value="review.rating" 
-                                                    color="warning" 
-                                                    density="compact" 
-                                                    size="x-small" 
-                                                    readonly
-                                                 ></v-rating>
-                                             </div>
-                                         </div>
-                                     </div>
-                                     <p class="text-body-2 text-grey-darken-2 pl-13">{{ review.comment }}</p>
-                                 </div>
-                             </div>
-                         </v-col>
-                     </v-row>
-                 </v-card-text>
-             </v-card>
+             <ProductReviews v-if="product.id" :key="product.id" :product-id="product.id" @summary="reviewSummary = $event" />
          </v-col>
-         <!-- Left Sidebar (30%) - Empty Card -->
-         <v-col cols="12" md="4" lg="3">
-             <v-card class="h-100 rounded-lg" elevation="0" border>
-                 <v-card-text class="d-flex align-center justify-center text-grey-lighten-1" style="min-height: 300px;">
-                     Sidebar Item
-                 </v-card-text>
-             </v-card>
-         </v-col>
+
       </v-row>
     </v-container>
 
-    <!-- Write Review Modal -->
-    <v-dialog v-model="showReviewDialog" max-width="500">
-      <v-card class="rounded-lg">
-        <v-card-title class="d-flex justify-space-between align-center pa-4 border-b">
-          <span class="text-h6 font-weight-bold">Write a Review</span>
-          <v-btn icon="mdi-close" variant="text" size="small" @click="showReviewDialog = false"></v-btn>
-        </v-card-title>
 
-        <v-card-text class="pa-4">
-          <v-form @submit.prevent="submitReview">
-            <div class="mb-4 text-center">
-              <div class="text-subtitle-1 mb-2">Your Rating</div>
-              <v-rating
-                v-model="reviewForm.rating"
-                color="warning"
-                hover
-                half-increments
-                density="comfortable"
-                size="large"
-              ></v-rating>
-            </div>
-
-            <v-textarea
-              v-model="reviewForm.comment"
-              label="Your Review"
-              placeholder="What did you like or dislike?"
-              variant="outlined"
-              rows="4"
-              color="primary"
-              class="mb-2"
-            ></v-textarea>
-
-            <v-file-input
-              v-model="reviewForm.image"
-              label="Upload Image (Optional)"
-              accept="image/*"
-              variant="outlined"
-              prepend-icon="mdi-camera"
-              density="compact"
-              show-size
-              color="primary"
-            ></v-file-input>
-          </v-form>
-        </v-card-text>
-
-        <v-divider></v-divider>
-
-        <v-card-actions class="pa-4">
-          <v-spacer></v-spacer>
-          <v-btn
-            variant="text"
-            color="grey-darken-1"
-            class="text-none"
-            @click="showReviewDialog = false"
-          >
-            Cancel
-          </v-btn>
-          <v-btn
-            color="primary"
-            class="text-none px-6"
-            variant="flat"
-            :loading="isSubmittingReview"
-            @click="submitReview"
-            :disabled="!reviewForm.rating"
-          >
-            Submit Review
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
   </div>
 </template>
 
@@ -362,6 +212,7 @@
 const mediaBase = useRuntimeConfig().public.apiBase.replace(/\/api\/v1\/?$/, "")
 
 import { ref, computed } from 'vue'
+import { ChevronRight, House } from 'lucide-vue-next'
 import { useCartStore } from '~/stores/cart'
 import { useWishlistStore } from '~/stores/wishlist'
 
@@ -392,11 +243,11 @@ const toggleWishlist = async () => {
 const { data: response, pending, error } = await useFetch(`${apiBase}/products/${route.params.slug}`)
 const product = computed(() => response.value?.data || {})
 
-// Breadcrumbs
-const breadcrumbs = computed(() => [
-    { title: 'Home', disabled: false, href: '/' },
-    { title: product.value?.name || 'Product', disabled: true, href: '#' }
-])
+const breadcrumbCategories = computed(() => {
+    const category = product.value.category
+    if (!category) return []
+    return category.parent ? [category.parent, category] : [category]
+})
 
 // Images
 const getImageUrl = (path) => {
@@ -437,47 +288,7 @@ const allImages = computed(() => {
     return list
 })
 
-// Static Reviews
-const reviews = ref([
-    {
-        name: 'Jack Doe',
-        avatar: 'https://placehold.co/100',
-        date: '29 Sep 2023 06:40:PM',
-        rating: 4.5,
-        comment: 'Avoid this product. The quality is terrible, and it started falling apart almost immediately. I wish I had read more reviews before buying. Lesson learned.'
-    },
-    {
-        name: 'Jessica Miller',
-        avatar: 'https://placehold.co/100',
-        date: '29 Sep 2023 06:40:PM',
-        rating: 5,
-        comment: 'Honestly, I regret buying this item. The quality is subpar, and it feels like a waste of money. I wouldn\'t recommend it to anyone.'
-    },
-    {
-        name: 'Rome Doe',
-        avatar: 'https://placehold.co/100',
-        date: '29 Sep 2023 06:40:PM',
-        rating: 5,
-        comment: 'I am extremely satisfied with this purchase. The item arrived promptly, and the quality is exceptional. It\'s evident that the makers paid attention to detail. Overall, a fantastic buy!'
-    }
-])
-
-const getRatingPercent = (star) => {
-    const map = { 5: 80, 4: 40, 3: 0, 2: 30, 1: 20 }
-    return map[star] || 0
-}
-
-const getRatingCount = (star) => {
-    const map = { 5: 2, 4: 1, 3: 0, 2: 1, 1: 1 }
-    return map[star] || 0
-}
-
-const getRatingColor = (star) => {
-    if (star >= 4) return 'green'
-    if (star === 3) return 'orange'
-    if (star <= 2) return 'red'
-    return 'grey'
-}
+const reviewSummary = ref({ count: 0, average: null })
 
 // Variations Logic
 const variations = computed(() => {
@@ -523,32 +334,25 @@ const selectedSku = computed(() => {
     return null
 })
 
-// Review Modal
-const showReviewDialog = ref(false)
-const isSubmittingReview = ref(false)
-const reviewForm = ref({
-    rating: 0,
-    comment: '',
-    image: null
-})
-
-const submitReview = () => {
-    isSubmittingReview.value = true
-    // TODO: Implement backend submission later
-    console.log('Submitting review:', reviewForm.value)
-    
-    // Simulate process
-    setTimeout(() => {
-        isSubmittingReview.value = false
-        showReviewDialog.value = false
-        // Reset form
-        reviewForm.value = { rating: 0, comment: '', image: null }
-        alert('Review submitted successfully!')
-    }, 1500)
-}
 </script>
 
 <style scoped>
+.product-detail-page { width: 100%; padding-inline: 40px; box-sizing: border-box; }
+.product-detail-page > .v-container { width: 100%; max-width: none; padding-inline: 0; }
+@media(max-width:1100px) { .product-detail-page { padding-inline: 24px; } }
+@media(max-width:760px) { .product-detail-page { padding-inline: 16px; } }
+.product-breadcrumb-container { padding-top: 20px; padding-bottom: 24px; }
+.product-breadcrumb ol { display: flex; align-items: center; flex-wrap: wrap; gap: 9px 0; padding: 0; margin: 0; list-style: none; font-size: 12px; line-height: 1.7; }
+.product-breadcrumb li { display: flex; align-items: center; gap: 10px; min-width: 0; margin-right: 10px; }
+.product-breadcrumb a { display: inline-flex; align-items: center; gap: 6px; color: #78608e; text-decoration: none; }
+.product-breadcrumb a:hover { color: #503080; text-decoration: underline; }
+.product-breadcrumb svg { flex-shrink: 0; color: #a18bb1; }
+.product-breadcrumb .breadcrumb-current { flex: 0 1 auto; color: #544060; margin-right: 0; }
+.breadcrumb-current span { overflow-wrap: anywhere; }
+@media(max-width:600px) { .product-breadcrumb-container { padding-top: 16px; padding-bottom: 20px; }.product-breadcrumb ol { font-size: 11px; }.product-breadcrumb li { gap: 6px; margin-right: 6px; } }
+
+.product-review-link { display: inline-block; color: #866098; font-size: 12px; margin-bottom: 24px; text-decoration: none; }
+.product-review-link:hover { text-decoration: underline; }
 .gap-4 { gap: 1rem; }
 .gap-2 { gap: 0.5rem; }
 .w-120 { width: 120px; min-width: 120px; }

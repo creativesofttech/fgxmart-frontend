@@ -131,6 +131,16 @@ const menuItems = [
         icon: HelpCircle
       },
       {
+        label: 'Terms & Conditions',
+        path: '/admin/terms-and-conditions',
+        icon: FileText
+      },
+      {
+        label: 'Privacy Policy',
+        path: '/admin/privacy-policy',
+        icon: Shield
+      },
+      {
         label: 'Website Pages',
         path: '/admin/pages',
         icon: FileText
@@ -142,7 +152,8 @@ const { can } = useAdminAuth()
 const canVisit = (path) => {
   const [, , resource, action] = path.split('/')
   if (resource === 'dashboard') return true
-  return can(`${resource === 'analytics' ? 'orders' : resource}.${action === 'create' ? 'create' : 'index'}`)
+  const permissionResource = resource === 'analytics' ? 'orders' : ['terms-and-conditions', 'privacy-policy'].includes(resource) ? 'legal-pages' : resource
+  return can(`${permissionResource}.${action === 'create' ? 'create' : 'index'}`)
 }
 const visibleMenuItems = computed(() => menuItems.flatMap(item => {
   if (!item.children) return canVisit(item.path) ? [item] : []
@@ -170,7 +181,7 @@ const toggleSubmenu = (label) => {
 .nav-icon { width: 19px; height: 19px; flex-shrink: 0; }
 .chevron { width: 15px; margin-left: auto; }
 .chevron.rotate { transform: rotate(180deg); }
-.submenu { margin: 3px 0 7px 8px; }
+.submenu { display: flex; flex-direction: column; gap: 4px; margin: 5px 0 7px 8px; }
 .submenu::before { display: none; }
 .collapsed .submenu { margin-left: 0; padding-left: 0; border: 0; }
 .collapsed .nav-item { justify-content: center; padding-inline: 10px; }

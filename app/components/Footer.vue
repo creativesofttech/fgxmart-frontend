@@ -39,14 +39,14 @@ const [{ data: catRes }, { data: compRes }, { data: pagesRes }] = await Promise.
 ])
 const company = computed(() => compRes.value?.data?.company || {})
 const categories = computed(() => (catRes.value?.data || []).filter(item => !item.parent_id && item.status !== false).slice(0, 4))
-const footerPages = computed(() => (pagesRes.value?.data || []).filter(page => page.status !== false && ['footer', 'both'].includes(page.position)))
+const footerPages = computed(() => (pagesRes.value?.data || []).filter(page => page.status !== false && ['footer', 'both'].includes(page.position) && !['terms-and-conditions', 'privacy-policy'].includes(page.slug)))
 const linkGroups = computed(() => [
   { title: 'Shop by Category', links: categories.value.length ? categories.value.map(category => ({ label: category.name, to: `/category/${category.slug}` })) : [
     { label: 'Packed Food', to: '/products' }, { label: 'Clothing', to: '/products?search=clothing' }, { label: 'Electronics', to: '/products?search=electronics' }, { label: 'Kitchen Utensils', to: '/products?search=kitchen' },
   ] },
   { title: 'Quick Links', links: [{ label: 'Home', to: '/' }, { label: 'Shop', to: '/products' }, { label: 'New Arrivals', to: '/new-arrivals' }, { label: 'Best Sellers', to: '/best-sellers' }, { label: 'Track Order', to: '/my-account?tab=order' }] },
   { title: 'Customer Support', links: [{ label: 'FAQs & Help', to: '/faqs' }, { label: 'Your Account', to: '/my-account' }, { label: 'Your Enquiry', to: '/cart' }, { label: 'Wishlist', to: '/wishlist' }] },
-  { title: 'About FGX MART', links: footerPages.value.length ? footerPages.value.map(page => ({ label: page.title, to: `/${page.slug}` })) : [{ label: 'Shopping Guide', to: '/faqs' }, { label: 'Explore Our Catalogue', to: '/products' }, { label: 'Get Started', to: '/login' }] },
+  { title: 'About FGX MART', links: [...(footerPages.value.length ? footerPages.value.map(page => ({ label: page.title, to: `/${page.slug}` })) : [{ label: 'Shopping Guide', to: '/faqs' }, { label: 'Explore Our Catalogue', to: '/products' }, { label: 'Get Started', to: '/login' }]), { label: 'Terms & Conditions', to: '/terms-and-conditions' }, { label: 'Privacy Policy', to: '/privacy-policy' }] },
 ])
 </script>
 

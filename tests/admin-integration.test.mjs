@@ -8,8 +8,19 @@ import { chromium } from '@playwright/test'
 
 // Exercise the built Nuxt server against an isolated API fixture. Laravel has its
 // own authorization regression suite in tests/Feature/AdminAccessTest.php.
+const legalDefaults = {
+  'terms-and-conditions': {slug:'terms-and-conditions',title:'Terms & Conditions',content:'<h2>Using FGX MART</h2><p>Explore products and share your enquiry.</p>',updated_at:null},
+  'privacy-policy': {slug:'privacy-policy',title:'Privacy Policy',content:'<h2>Your information</h2><p>Account details help us manage your enquiries.</p>',updated_at:null},
+}
+let legalFixtures = structuredClone(legalDefaults)
+let legalSaveFailure = false
+let faqFixtures = [], faqFailure = false
+let companyInfoFixture = {company:null,bank:null}
+let reviewFixtures = []
+let reviewFailure = false
+const reviewResponse = page => ({data:reviewFixtures.slice((page-1)*6,page*6),summary:{count:reviewFixtures.length,average:reviewFixtures.length ? Math.round(reviewFixtures.reduce((sum,review)=>sum+review.rating,0)/reviewFixtures.length*10)/10 : null,distribution:[5,4,3,2,1].map(rating=>({rating,count:reviewFixtures.filter(review=>Math.round(review.rating)===rating).length}))},meta:{current_page:page,last_page:Math.max(1,Math.ceil(reviewFixtures.length/6))}})
 const requests = []
-const tokens = new Set(['integration-admin', 'restricted-admin'])
+const tokens = new Set(['integration-admin', 'restricted-admin', 'legal-viewer-admin'])
 const product = { id: 1, name: 'Test Product', slug: 'test-product', base_price: '10.00', discount_price: null, stock_quantity: 10, status: true, is_hot_deal: false, is_new_arrival: true, is_best_seller: false, cover_image_url: '/assets/images/home/cat-1.webp', countries: [], media: [], attribute_values: [] }
 const publicProducts = [product,
   { ...product, id: 2, name: 'Second Product', slug: 'second-product', discount_price: '8.00', is_featured: true, is_new_arrival: false, is_hot_deal: true, cover_image_url: '/assets/images/home/cat-2.webp' },
@@ -55,7 +66,7 @@ const newTestContext = async (options = {}, savedLocation = true) => {
   })
   return context
 }
-const adminPaths = ['/admin', '/admin/dashboard', '/admin/analytics', '/admin/products', '/admin/products/create', '/admin/products/1/edit', '/admin/categories', '/admin/brands', '/admin/attributes', '/admin/countries', '/admin/zipcodes', '/admin/orders', '/admin/orders/FGX-TEST', '/admin/company-settings', '/admin/faqs', '/admin/pages', '/admin/pages/create', '/admin/pages/edit/1', '/admin/roles', '/admin/roles/create', '/admin/roles/1', '/admin/permissions']
+const adminPaths = ['/admin', '/admin/dashboard', '/admin/analytics', '/admin/products', '/admin/products/create', '/admin/products/1/edit', '/admin/categories', '/admin/brands', '/admin/attributes', '/admin/countries', '/admin/zipcodes', '/admin/orders', '/admin/orders/FGX-TEST', '/admin/company-settings', '/admin/terms-and-conditions', '/admin/privacy-policy', '/admin/faqs', '/admin/pages', '/admin/pages/create', '/admin/pages/edit/1', '/admin/roles', '/admin/roles/create', '/admin/roles/1', '/admin/permissions']
 
 before(async () => {
   upstream = createServer(async (req, res) => {
@@ -86,7 +97,18 @@ before(async () => {
     if (url.pathname.startsWith('/api/v1/admin/')) {
       const token = req.headers.authorization?.replace('Bearer ', '')
       if (!tokens.has(token)) return send(401, { message: 'Unauthenticated.' })
-      if (url.pathname.endsWith('/user')) return send(200, { data: { id: 1, name: 'Fixture Admin', email: 'admin@example.test', roles: token === 'restricted-admin' ? ['viewer'] : ['super-admin'], permissions: token === 'restricted-admin' ? ['products.index'] : [] } })
+      if (url.pathname.endsWith('/user')) return send(200, { data: { id: 1, name: 'Fixture Admin', email: 'admin@example.test', roles: token === 'integration-admin' ? ['super-admin'] : ['viewer'], permissions: token === 'restricted-admin' ? ['products.index'] : token === 'legal-viewer-admin' ? ['legal-pages.index'] : [] } })
+      if (url.pathname.startsWith('/api/v1/admin/legal-pages/')) {
+        if(token === 'restricted-admin' || (token === 'legal-viewer-admin' && req.method !== 'GET'))return send(403,{message:'Forbidden'})
+        const slug=url.pathname.split('/').at(-1)
+        if(!legalFixtures[slug])return send(404,{message:'Not found'})
+        if(req.method === 'PUT') {
+          if(legalSaveFailure)return send(422,{errors:{title:['Please enter a valid page title.']}})
+          const body=JSON.parse(raw)
+          legalFixtures[slug]={slug,title:body.title,content:body.content,updated_at:'2026-11-18T12:00:00Z'}
+        }
+        return send(200,{data:legalFixtures[slug],message:'Page saved successfully.'})
+      }
       if (/\/zipcodes(?:\/\d+)?$/.test(url.pathname)) {
         const id = Number(url.pathname.split('/').at(-1))
         if (req.method === 'GET') return send(200, { data: zipcodeFixtures, countries: zipcodeCountries, configured_country_ids: zipcodeFixtures.map(row => row.country_id), current_page: 1, last_page: 1, total: zipcodeFixtures.length, from: zipcodeFixtures.length ? 1 : null, to: zipcodeFixtures.length || null })
@@ -119,8 +141,26 @@ before(async () => {
       return send(200, {data:saved.split(',').map(code=>code.trim()).filter(Boolean)})
     }
     if (url.pathname === '/api/v1/countries') return send(200, { data: url.searchParams.has('all') ? countryFixtures : countryFixtures.slice(0, 10), total: countryFixtures.length })
-    if (url.pathname.endsWith('/company-info')) return send(200, { status: 'success', data: { company: null, bank: null } })
+    if (url.pathname.startsWith('/api/v1/legal-pages/')) {
+      const data=legalFixtures[url.pathname.split('/').at(-1)]
+      return data ? send(200,{data}) : send(404,{message:'Not found'})
+    }
+    if (url.pathname === '/api/v1/faqs') return faqFailure ? send(500,{message:'Unavailable'}) : send(200,{data:faqFixtures})
+    if (url.pathname.endsWith('/company-info')) return send(200, { status: 'success', data: companyInfoFixture })
     if (url.pathname.endsWith('/categories')) return send(200, { data: categoryFixtures.map(category => renamedCategory && category.id === 1 ? { ...category, name: 'Food & Pantry', short_description: 'A description edited in admin', image_url: '/assets/images/home/cat-4.webp' } : category) })
+    if (url.pathname === '/api/v1/products/test-product') return send(200,{data:product})
+    if (url.pathname === '/api/v1/products/1/review') return send(200,{data:reviewFixtures.find(review=>review.id===1)||null})
+    if (url.pathname === '/api/v1/products/1/reviews') {
+      if(req.method==='POST') {
+        if(!req.headers.authorization)return send(401,{message:'Unauthenticated'})
+        if(reviewFailure)return send(422,{errors:{review:['Please provide a more detailed review.']}})
+        const body=JSON.parse(raw)
+        const saved={id:1,name:'Fixture Customer',rating:body.rating,review:body.review,created_at:'2026-11-18T10:00:00Z',is_approved:true}
+        reviewFixtures=[saved,...reviewFixtures.filter(review=>review.id!==1)]
+        return send(200,{data:saved,message:'Thank you. Your review has been saved.'})
+      }
+      return send(200,reviewResponse(Number(url.searchParams.get('page')||1)))
+    }
     if (url.pathname.endsWith('/products')) {
       let data = publicProductMode === 'empty' || (publicProductMode === 'fallback' && url.searchParams.has('is_featured')) ? [] : publicProducts
       for (const flag of ['is_hot_deal', 'is_new_arrival', 'is_best_seller']) if (url.searchParams.get(flag) === '1') data = data.filter(item => item[flag])
@@ -224,7 +264,7 @@ test('validated admin session survives SSR and all migrated page routes resolve'
 test('limited administrators cannot render pages beyond their permissions', async () => {
   const cookie = 'fgx_admin_session=restricted-admin'
   assert.equal((await fetch(`${base}/admin/products`, { headers: { Cookie: cookie } })).status, 200)
-  for (const path of ['/admin/orders', '/admin/products/create', '/admin/products/1/edit', '/admin/roles', '/admin/zipcodes']) {
+  for (const path of ['/admin/orders', '/admin/products/create', '/admin/products/1/edit', '/admin/roles', '/admin/zipcodes', '/admin/terms-and-conditions', '/admin/privacy-policy']) {
     assert.equal((await fetch(`${base}${path}`, { headers: { Cookie: cookie } })).status, 403, path)
   }
 })
@@ -456,8 +496,8 @@ test('category and featured cards use WebP assets and connect to wishlist and en
   assert.equal(await page.locator('.category-card img').evaluateAll(images => images.every(image => image.getAttribute('src').endsWith('.webp'))), true)
   const firstCard = page.locator('.catalogue-card').first()
   assert.equal(await firstCard.locator('img').getAttribute('src'), '/assets/images/home/cat-1.webp')
-  await firstCard.getByRole('button', { name: 'Add to Enquiry', exact: true }).click()
-  await firstCard.getByRole('button', { name: 'Added to enquiry' }).waitFor()
+  await firstCard.getByRole('button', { name: 'Add to cart', exact: true }).click()
+  await firstCard.getByRole('button', { name: 'Added to cart' }).waitFor()
   const savedCart = await page.evaluate(() => JSON.parse(localStorage.getItem('guest_cart')))
   assert.equal(savedCart[0].product_id, product.id)
   assert.equal(savedCart[0].quantity, 1)
@@ -1089,8 +1129,8 @@ test('quick view shows only the short summary and supports compact mobile layout
     assert.equal(await dialog.locator('.quick-visual img').getAttribute('src'),'/assets/images/home/cat-1.webp')
     assert.ok(await dialog.locator('.quick-view-box').evaluate(element=>element.getBoundingClientRect().height<750))
     await dialog.getByRole('button',{name:'Increase quantity',exact:true}).click()
-    await dialog.getByRole('button',{name:'Add to enquiry',exact:true}).click()
-    await dialog.getByRole('status').getByText('2 items added to your enquiry.',{exact:true}).waitFor()
+    await dialog.getByRole('button',{name:'Add to cart',exact:true}).click()
+    await dialog.getByRole('status').getByText('2 items added to your cart.',{exact:true}).waitFor()
     assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('guest_cart'))[0].quantity),2)
     await page.keyboard.press('Escape');await dialog.waitFor({state:'hidden'})
     assert.equal(await trigger.evaluate(element=>document.activeElement===element),true)
@@ -1107,12 +1147,12 @@ test('quick view shows only the short summary and supports compact mobile layout
     await page.locator('.product-image-container').first().hover();await page.getByRole('button',{name:'Quick view Test Product',exact:true}).click();await dialog.waitFor()
     assert.match(await dialog.innerText(),/Open product details for more information/)
     assert.doesNotMatch(await dialog.innerText(),/FULL DESCRIPTION/)
-    assert.equal(await dialog.getByRole('button',{name:'Add to enquiry',exact:true}).isDisabled(),true)
+    assert.equal(await dialog.getByRole('button',{name:'Add to cart',exact:true}).isDisabled(),true)
     await dialog.getByRole('combobox',{name:'Choose an option',exact:true}).click()
     await page.getByRole('option',{name:'Size: Small Available',exact:true}).click()
     await dialog.getByText('$12.00',{exact:true}).waitFor()
-    await dialog.getByRole('button',{name:'Add to enquiry',exact:true}).click()
-    await dialog.getByRole('status').getByText('1 item added to your enquiry.',{exact:true}).waitFor()
+    await dialog.getByRole('button',{name:'Add to cart',exact:true}).click()
+    await dialog.getByRole('status').getByText('1 item added to your cart.',{exact:true}).waitFor()
     const items=await page.evaluate(()=>JSON.parse(localStorage.getItem('guest_cart')))
     assert.equal(items.find(item=>item.options?.variation_id===10).quantity,1)
     await page.keyboard.press('Escape')
@@ -1269,4 +1309,315 @@ test('customer location keeps browser selection without addresses and prefers th
       assert.deepEqual(errors,[])
     } finally {await context.close()}
   }
+})
+
+test('homepage collection cart icons reveal on hover and keyboard focus and add from all three sections', {timeout:120_000}, async () => {
+  const context=await newTestContext({viewport:{width:1440,height:1000},reducedMotion:'reduce'})
+  const page=await context.newPage();const errors=[];page.on('pageerror',error=>errors.push(error.message))
+  try {
+    await page.goto(`${base}/`,{waitUntil:'networkidle'})
+    for (const name of ['Hot Deals','New Arrivals','Best Sellers']) {
+      const section=page.getByRole('region',{name,exact:true})
+      const card=section.locator('.collection-card').first()
+      const button=card.locator('.collection-cart')
+      await card.scrollIntoViewIfNeeded()
+      await page.mouse.move(0,0)
+      assert.equal(await button.evaluate(element=>getComputedStyle(element).opacity),'0')
+      await card.hover()
+      assert.equal(await button.evaluate(element=>getComputedStyle(element).opacity),'1')
+      await page.mouse.move(0,0);await button.focus()
+      assert.equal(await button.evaluate(element=>getComputedStyle(element).opacity),'1')
+      await page.keyboard.press('Enter')
+      await section.getByRole('status').getByText(/added to your cart/).waitFor()
+      assert.equal(await button.evaluate(element=>element.classList.contains('is-added')),true)
+    }
+    assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('guest_cart')).reduce((sum,item)=>sum+item.quantity,0)),3)
+    assert.ok(page.url().endsWith('/'),'Cart buttons do not navigate to product details')
+    await page.getByRole('link',{name:'Cart, 3 items',exact:true}).waitFor()
+    await page.screenshot({path:'test-artifacts/home-collection-cart-desktop.png'})
+    assert.deepEqual(errors,[])
+  } finally { await context.close() }
+  const touchContext=await newTestContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true,reducedMotion:'reduce'})
+  const touchPage=await touchContext.newPage()
+  try {
+    await touchPage.goto(`${base}/`,{waitUntil:'networkidle'})
+    const section=touchPage.getByRole('region',{name:'New Arrivals',exact:true})
+    const button=section.locator('.collection-cart').first()
+    await button.scrollIntoViewIfNeeded()
+    assert.equal(await button.evaluate(element=>getComputedStyle(element).opacity),'1')
+    await button.tap()
+    await section.getByRole('status').getByText(/added to your cart/).waitFor()
+    assert.ok(await touchPage.evaluate(()=>document.documentElement.scrollWidth<=innerWidth))
+    await touchPage.screenshot({path:'test-artifacts/home-collection-cart-mobile.png'})
+  } finally {await touchContext.close()}
+})
+
+test('collection cart handles signed-in updates and reports failed additions without success feedback', {timeout:120_000}, async () => {
+  const context=await newTestContext({viewport:{width:1440,height:1000},reducedMotion:'reduce'})
+  await context.addInitScript(()=>{
+    localStorage.setItem('auth_token','fixture-customer-token')
+    localStorage.setItem('user',JSON.stringify({id:7,name:'Fixture Customer'}))
+  })
+  const page=await context.newPage();let items=[];let fail=false
+  await page.route('**/api/v1/cart',route=>{
+    if(route.request().method()==='POST') {
+      assert.equal(route.request().headers().authorization,'Bearer fixture-customer-token')
+      if(fail)return route.fulfill({status:422,json:{message:'Unable to add product'}})
+      const body=route.request().postDataJSON()
+      assert.equal(body.quantity,1)
+      items=[{id:1,product_id:body.product_id,product,quantity:1,options:null}]
+      return route.fulfill({json:{data:items[0]}})
+    }
+    return route.fulfill({json:items})
+  })
+  try {
+    await page.goto(`${base}/`,{waitUntil:'networkidle'})
+    const arrivals=page.getByRole('region',{name:'New Arrivals',exact:true})
+    await arrivals.locator('.collection-cart').focus();await page.keyboard.press('Enter')
+    await arrivals.getByRole('status').getByText(/added to your cart/).waitFor()
+    await page.getByRole('link',{name:'Cart, 1 items',exact:true}).waitFor()
+    fail=true
+    const deals=page.getByRole('region',{name:'Hot Deals',exact:true})
+    await deals.locator('.collection-cart').focus();await page.keyboard.press('Enter')
+    await deals.getByRole('status').getByText('Unable to add this product. Please try again.',{exact:true}).waitFor()
+    assert.equal(await deals.locator('.collection-cart.is-added').count(),0)
+    assert.equal(items.length,1)
+  } finally {await context.close()}
+})
+
+test('product reviews show honest empty state, require sign in and save editable customer ratings', {timeout:120_000}, async () => {
+  const previous=reviewFixtures;reviewFixtures=[]
+  const context=await newTestContext({viewport:{width:1440,height:1100},reducedMotion:'reduce'})
+  const page=await context.newPage();const errors=[];page.on('pageerror',error=>errors.push(error.message))
+  try {
+    await page.goto(`${base}/products/test-product`,{waitUntil:'networkidle'})
+    const section=page.getByRole('region',{name:'Customer reviews',exact:true})
+    await section.getByText('Be the first to share your experience',{exact:true}).waitFor()
+    assert.equal(await page.getByText('Jack Doe',{exact:true}).count(),0)
+    assert.equal(await page.getByText('(23 Customer Reviews)',{exact:true}).count(),0)
+    assert.equal(await section.locator('.customer-review').count(),0)
+    await section.scrollIntoViewIfNeeded();await page.screenshot({path:'test-artifacts/product-reviews-empty.png'})
+    assert.match(await section.getByRole('link',{name:'Sign in to write a review'}).getAttribute('href'),/redirect=.*customer-reviews/)
+    await page.evaluate(()=>{
+      localStorage.setItem('auth_token','fixture-customer-token')
+      localStorage.setItem('user',JSON.stringify({id:7,name:'Fixture Customer'}))
+    })
+    await page.reload({waitUntil:'networkidle'})
+    const writeReview=section.getByRole('button',{name:'Write a review',exact:true})
+    await writeReview.click()
+    const reviewDialog=page.getByRole('dialog',{name:'Your experience, in your words',exact:true})
+    await reviewDialog.waitFor()
+    await page.keyboard.press('Escape')
+    await reviewDialog.waitFor({state:'hidden'})
+    assert.equal(await writeReview.evaluate(element=>element===document.activeElement),true)
+    await writeReview.click();await reviewDialog.waitFor()
+    await page.mouse.click(8,8);await reviewDialog.waitFor({state:'hidden'})
+    await writeReview.click();await reviewDialog.waitFor()
+    await page.setViewportSize({width:390,height:844})
+    assert.ok(await reviewDialog.locator('.review-form').evaluate(element=>{const rect=element.getBoundingClientRect();return rect.left>=0&&rect.right<=innerWidth&&rect.top>=0&&rect.bottom<=innerHeight&&element.scrollWidth<=element.clientWidth}))
+    await page.screenshot({path:'test-artifacts/product-review-popup-mobile.png'})
+    await page.setViewportSize({width:1440,height:1100})
+    await section.getByRole('radio',{name:'5 stars',exact:true}).check()
+    await section.getByRole('textbox',{name:/Your review/}).fill('Good quality and easy to use. I would recommend it.')
+    await page.screenshot({path:'test-artifacts/product-review-form.png'})
+    await section.getByRole('button',{name:'Submit review',exact:true}).click()
+    await section.getByRole('status').getByText('Thank you. Your review has been saved.',{exact:true}).waitFor()
+    await section.getByText('5.0',{exact:true}).waitFor()
+    assert.equal(await section.locator('.customer-review').count(),1)
+    assert.equal(await section.locator('.review-score > strong').innerText(),'5.0')
+    assert.match(await page.locator('.product-review-link').innerText(),/1 customer review/)
+    await section.getByRole('button',{name:'Edit your review',exact:true}).click()
+    assert.equal(await section.getByRole('radio',{name:'5 stars',exact:true}).isChecked(),true)
+    await section.getByRole('radio',{name:'3 stars',exact:true}).check()
+    await section.getByRole('textbox',{name:/Your review/}).fill('Updated after using it. Useful but could be improved.')
+    reviewFailure=true
+    await section.getByRole('button',{name:'Update review',exact:true}).click()
+    await section.getByRole('alert').getByText('Please provide a more detailed review.',{exact:true}).waitFor()
+    reviewFailure=false
+    await section.getByRole('button',{name:'Update review',exact:true}).click()
+    await section.getByRole('status').getByText('Thank you. Your review has been saved.',{exact:true}).waitFor()
+    assert.equal(reviewFixtures.length,1)
+    await section.getByText('3.0',{exact:true}).waitFor()
+    assert.equal(await section.locator('.review-score > strong').innerText(),'3.0')
+    await section.scrollIntoViewIfNeeded();await page.screenshot({path:'test-artifacts/product-reviews-desktop.png'})
+    reviewFixtures=Array.from({length:7},(_,index)=>({id:index+1,name:`Customer ${index+1}`,rating:index===0?5:4,review:'Helpful feedback from a registered customer.',created_at:'2026-11-18T10:00:00Z'}))
+    await page.reload({waitUntil:'networkidle'})
+    assert.equal(await section.locator('.customer-review').count(),6)
+    await section.getByRole('button',{name:'Next',exact:true}).click()
+    await section.getByText('Page 2 of 2',{exact:true}).waitFor()
+    await page.waitForFunction(()=>document.querySelectorAll('#customer-reviews .customer-review').length===1)
+    assert.equal(await section.locator('.customer-review').count(),1)
+    await page.setViewportSize({width:390,height:844})
+    await section.scrollIntoViewIfNeeded();await page.screenshot({path:'test-artifacts/product-reviews-mobile.png',fullPage:true})
+    assert.ok(await section.evaluate(element=>element.scrollWidth<=element.clientWidth),'Review content fits mobile width')
+    assert.deepEqual(errors,[])
+  } finally {reviewFixtures=previous;reviewFailure=false;await context.close()}
+})
+
+test('product breadcrumbs replace the title banner and follow category ancestry', {timeout:120_000}, async () => {
+  const originalCategory=product.category, originalName=product.name
+  const context=await newTestContext({viewport:{width:1440,height:1000},reducedMotion:'reduce'})
+  const page=await context.newPage();const errors=[];page.on('pageerror',error=>errors.push(error.message))
+  try {
+    product.category={id:2,name:'Pulses',slug:'pulses',parent_id:1,parent:{id:1,name:'Packed Food',slug:'packed-food'}}
+    await page.goto(`${base}/products/test-product`,{waitUntil:'networkidle'})
+    const breadcrumb=page.getByRole('navigation',{name:'Product breadcrumb',exact:true})
+    assert.deepEqual(await breadcrumb.locator('li').allTextContents(),['Home','Packed Food','Pulses','Test Product'])
+    assert.equal(await breadcrumb.getByRole('link',{name:'Home',exact:true}).getAttribute('href'),'/')
+    assert.equal(await breadcrumb.getByRole('link',{name:'Packed Food',exact:true}).getAttribute('href'),'/category/packed-food')
+    assert.equal(await breadcrumb.getByRole('link',{name:'Pulses',exact:true}).getAttribute('href'),'/category/pulses')
+    assert.equal(await breadcrumb.locator('[aria-current="page"]').innerText(),'Test Product')
+    assert.equal(await page.getByRole('heading',{level:1}).count(),1)
+    for (const width of [2560,1920,1440,1100,760,390]) {
+      await page.setViewportSize({width,height:1000})
+      const alignment=await page.evaluate(()=>{
+        const header=document.querySelector('.main-header'), headerRect=header.getBoundingClientRect(), headerStyle=getComputedStyle(header)
+        const breadcrumb=document.querySelector('.product-breadcrumb').getBoundingClientRect(), gallery=document.querySelector('.gallery-container').getBoundingClientRect(), reviews=document.querySelector('.reviews-section').getBoundingClientRect()
+        return {left:headerRect.left+parseFloat(headerStyle.paddingLeft),right:headerRect.right-parseFloat(headerStyle.paddingRight),breadcrumbLeft:breadcrumb.left,breadcrumbRight:breadcrumb.right,galleryLeft:gallery.left,reviewsLeft:reviews.left,reviewsRight:reviews.right,pageWidth:document.querySelector('.product-detail-page').getBoundingClientRect().width,overflow:document.documentElement.scrollWidth>innerWidth}
+      })
+      for(const left of [alignment.breadcrumbLeft,alignment.galleryLeft,alignment.reviewsLeft])assert.ok(Math.abs(left-alignment.left)<1,`Content aligns with header at ${width}px`)
+      for(const right of [alignment.breadcrumbRight,alignment.reviewsRight])assert.ok(Math.abs(right-alignment.right)<1)
+      assert.ok(alignment.pageWidth<=1920)
+      assert.equal(alignment.overflow,false)
+    }
+    await page.setViewportSize({width:1440,height:1000})
+    await page.screenshot({path:'test-artifacts/product-breadcrumb-desktop.png'})
+    product.category={id:1,name:'Packed Food',slug:'packed-food',parent_id:null,parent:null}
+    await page.reload({waitUntil:'networkidle'})
+    assert.deepEqual(await breadcrumb.locator('li').allTextContents(),['Home','Packed Food','Test Product'])
+    product.name='Toor Dal / Arhar Dal Unpolished | Rich in Taste | Chef Recommended | 500g / 1kg'
+    await page.setViewportSize({width:390,height:844})
+    await page.reload({waitUntil:'networkidle'})
+    assert.equal(await breadcrumb.locator('[aria-current="page"]').innerText(),product.name)
+    assert.ok(await breadcrumb.evaluate(element=>element.scrollWidth<=element.clientWidth))
+    await page.screenshot({path:'test-artifacts/product-breadcrumb-mobile.png'})
+    delete product.category
+    await page.reload({waitUntil:'networkidle'})
+    assert.deepEqual(await breadcrumb.getByRole('link').allTextContents(),['Home'])
+    assert.deepEqual(errors,[])
+  } finally {product.name=originalName;if(originalCategory===undefined)delete product.category;else product.category=originalCategory;await context.close()}
+})
+
+test('FAQ help centre searches backend answers and uses real support contacts on desktop and mobile', {timeout:120_000}, async () => {
+  const originalFaqs=faqFixtures, originalCompany=companyInfoFixture
+  faqFixtures=[
+    {id:2,title:'Do I need an account?',description:'Sign in to continue to checkout and manage your account.',status:true,sort_order:20},
+    {id:1,title:'How do I download my PDF?',description:'Open checkout and use Download Proforma Invoice. Attach your PDF manually in WhatsApp.',status:true,sort_order:10},
+    {id:3,title:'How can I confirm delivery?',description:'Contact our team with your country and zipcode for delivery details.',status:true,sort_order:30},
+    {id:4,title:'Hidden draft FAQ',description:'This draft must not appear in the questions.',status:false,sort_order:0},
+  ]
+  companyInfoFixture={company:{phone_number:'+91 90000 00000',contact_email:'help@example.test'},bank:null}
+  const context=await newTestContext({viewport:{width:1440,height:1050},reducedMotion:'reduce'})
+  const page=await context.newPage();const errors=[];page.on('pageerror',error=>errors.push(error.message))
+  try {
+    await page.goto(`${base}/faqs`,{waitUntil:'networkidle'})
+    assert.equal(await page.locator('.faq-item').count(),3)
+    assert.equal(await page.locator('.faq-item h3').first().innerText(),'How do I download my PDF?')
+    assert.equal(await page.getByText('Hidden draft FAQ',{exact:true}).count(),0)
+    await page.locator('.faq-item summary').first().focus();await page.keyboard.press('Enter')
+    await page.locator('.faq-item').first().locator('.faq-answer').waitFor({state:'visible'})
+    assert.equal(await page.getByRole('link',{name:'Chat on WhatsApp',exact:false}).getAttribute('href'),'https://wa.me/919000000000')
+    assert.equal(await page.getByRole('link',{name:'Email our team',exact:true}).getAttribute('href'),'mailto:help@example.test')
+    await page.screenshot({path:'test-artifacts/faq-desktop.png',fullPage:true})
+    await page.getByRole('searchbox',{name:'Search FAQs',exact:true}).fill('zipcode')
+    assert.equal(await page.locator('.faq-item').count(),1)
+    assert.equal(await page.locator('.faq-item h3').innerText(),'How can I confirm delivery?')
+    await page.getByRole('button',{name:'My account',exact:true}).click()
+    assert.equal(await page.locator('.faq-item h3').innerText(),'Do I need an account?')
+    await page.getByRole('searchbox',{name:'Search FAQs',exact:true}).fill('missing answer')
+    await page.getByRole('heading',{name:'No matching answers just yet',exact:true}).waitFor()
+    await page.getByRole('button',{name:'Show all questions',exact:false}).click()
+    assert.equal(await page.locator('.faq-item').count(),3)
+    await page.setViewportSize({width:390,height:844})
+    await page.locator('.faq-item summary').first().click()
+    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth))
+    await page.screenshot({path:'test-artifacts/faq-mobile.png',fullPage:true})
+    faqFixtures=[];companyInfoFixture={company:null,bank:null}
+    await page.reload({waitUntil:'networkidle'})
+    await page.getByRole('heading',{name:'Helpful answers are on the way',exact:true}).waitFor()
+    assert.equal(await page.getByRole('link',{name:'Chat on WhatsApp',exact:false}).count(),0)
+    faqFailure=true;await page.reload({waitUntil:'networkidle'})
+    await page.getByRole('alert').getByText('We couldn\u2019t load your answers',{exact:true}).waitFor()
+    faqFailure=false;faqFixtures=[{id:1,title:'Recovered question',description:'The answers have loaded again.',status:true}]
+    await page.getByRole('button',{name:'Try again',exact:false}).click()
+    await page.getByRole('heading',{name:'Recovered question',exact:true}).waitFor()
+    assert.deepEqual(errors,[])
+  } finally {faqFixtures=originalFaqs;companyInfoFixture=originalCompany;faqFailure=false;await context.close()}
+})
+
+test('account orders render with no quick view product and wishlist quick view still opens safely', {timeout:120_000}, async () => {
+  const context=await newTestContext({viewport:{width:1440,height:1000},reducedMotion:'reduce'})
+  await context.addInitScript(()=>{
+    localStorage.setItem('auth_token','fixture-customer-token')
+    localStorage.setItem('user',JSON.stringify({id:7,name:'Fixture Customer',email:'customer@example.test'}))
+  })
+  const page=await context.newPage();const errors=[];page.on('pageerror',error=>errors.push(error.message))
+  await page.route('**/api/v1/wishlist',route=>route.fulfill({json:[{id:1,product_id:product.id,product}]}))
+  try {
+    await page.goto(`${base}/`,{waitUntil:'networkidle'})
+    await page.getByRole('link',{name:'Track order',exact:true}).click()
+    await page.waitForURL('**/my-account?tab=order')
+    await page.getByRole('heading',{name:'No Orders Yet',exact:true}).waitFor()
+    assert.equal(await page.locator('.quick-dialog[open]').count(),0)
+    await page.locator('.sidebar-list').getByText('Wishlist',{exact:true}).click()
+    await page.getByRole('heading',{name:'My Wishlist',exact:true}).waitFor()
+    await page.locator('.product-image-container').first().hover()
+    await page.getByRole('button',{name:'Quick view Test Product',exact:true}).click()
+    const dialog=page.getByRole('dialog',{name:'Quick view: Test Product',exact:true})
+    await dialog.waitFor()
+    await dialog.getByRole('heading',{name:'Test Product',exact:true}).waitFor()
+    await page.keyboard.press('Escape');await dialog.waitFor({state:'hidden'})
+    await page.locator('.sidebar-list').getByText('Order',{exact:true}).click()
+    await page.getByRole('heading',{name:'No Orders Yet',exact:true}).waitFor()
+    assert.deepEqual(errors,[])
+  } finally {await context.close()}
+})
+
+test('legal pages are editable through secured admin routes and published to footer pages', {timeout:120_000}, async () => {
+  const original=structuredClone(legalFixtures)
+  const context=await newTestContext({viewport:{width:1440,height:1050},reducedMotion:'reduce'})
+  const page=await context.newPage();const errors=[];page.on('pageerror',error=>errors.push(error.message))
+  try {
+    await page.goto(`${base}/admin-access`,{waitUntil:'networkidle'})
+    await page.getByLabel('Email address',{exact:true}).fill('admin@example.test')
+    await page.getByLabel('Password',{exact:true}).fill('fixture-password')
+    await page.getByRole('button',{name:'Login to dashboard',exact:true}).click();await page.waitForURL('**/admin/dashboard')
+    await page.locator('.sidebar').getByRole('button',{name:'Core Settings',exact:true}).click()
+    for(const label of ['Terms & Conditions','Privacy Policy'])await page.locator('.sidebar').getByRole('link',{name:label,exact:true}).waitFor()
+    for(const slug of ['terms-and-conditions','privacy-policy']) {
+      await page.goto(`${base}/admin/${slug}`,{waitUntil:'networkidle'})
+      const title=slug==='privacy-policy'?'Our Privacy Policy':'Our Terms & Conditions'
+      await page.getByLabel('Page title',{exact:false}).fill(title)
+      const editor=page.getByRole('textbox',{name:'Page content',exact:true})
+      await editor.fill('Updated policy content from the shared rich text editor.')
+      await page.getByRole('combobox',{name:'Text block',exact:true}).click()
+      await page.getByRole('option',{name:/H2/}).click()
+      legalSaveFailure=true
+      await page.getByRole('button',{name:'Save changes',exact:true}).click()
+      await page.getByRole('alert').getByText('Please enter a valid page title.',{exact:true}).waitFor()
+      legalSaveFailure=false
+      await page.getByRole('button',{name:'Save changes',exact:true}).click()
+      await page.getByRole('status').getByText('Page saved successfully.',{exact:true}).waitFor()
+      assert.equal(legalFixtures[slug].title,title)
+      assert.match(legalFixtures[slug].content,/<h2/)
+      await page.reload({waitUntil:'networkidle'})
+      assert.equal(await page.getByLabel('Page title',{exact:false}).inputValue(),title)
+      assert.match(await page.getByRole('textbox',{name:'Page content',exact:true}).innerText(),/Updated policy content/)
+      if(slug==='privacy-policy')await page.screenshot({path:'test-artifacts/admin-privacy-editor.png',fullPage:true})
+      await page.goto(`${base}/${slug}`,{waitUntil:'networkidle'})
+      await page.getByRole('heading',{name:title,exact:true,level:1}).waitFor()
+      assert.match(await page.locator('.legal-content').innerText(),/Updated policy content/)
+      assert.equal(await page.locator('footer').getByRole('link',{name:'Terms & Conditions',exact:true}).getAttribute('href'),'/terms-and-conditions')
+      assert.equal(await page.locator('footer').getByRole('link',{name:'Privacy Policy',exact:true}).getAttribute('href'),'/privacy-policy')
+    }
+    await page.screenshot({path:'test-artifacts/storefront-privacy-page.png',fullPage:true})
+    await page.setViewportSize({width:390,height:844})
+    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth))
+    await page.screenshot({path:'test-artifacts/storefront-privacy-mobile.png',fullPage:true})
+    const viewer=await fetch(`${base}/admin/privacy-policy`,{headers:{Cookie:'fgx_admin_session=legal-viewer-admin'}})
+    assert.equal(viewer.status,200)
+    const viewerHTML=await viewer.text();assert.doesNotMatch(viewerHTML,/Save changes|contenteditable="true"/)
+    assert.equal((await fetch(`${base}/api/admin/legal-pages/privacy-policy`,{method:'PUT',headers:{Cookie:'fgx_admin_session=legal-viewer-admin','X-FGX-Admin':'1','Content-Type':'application/json'},body:JSON.stringify({title:'Forbidden',content:'<p>Forbidden.</p>'})})).status,403)
+    assert.deepEqual(errors,[])
+  } finally {legalFixtures=original;legalSaveFailure=false;await context.close()}
 })

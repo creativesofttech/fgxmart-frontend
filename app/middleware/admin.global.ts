@@ -13,7 +13,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
   if (signedIn && isAdmin) {
     const segments = path.split('/').filter(Boolean)
     const module = segments[1]
-    const resource = module === 'analytics' ? 'orders' : module
+    const resource = module === 'analytics' ? 'orders' : ['terms-and-conditions', 'privacy-policy'].includes(module) ? 'legal-pages' : module
     if (resource && resource !== 'dashboard') {
       const action = segments.includes('create') ? 'create' :
         (segments.includes('edit') || (resource === 'roles' && segments[2])) ? 'edit' : 'index'

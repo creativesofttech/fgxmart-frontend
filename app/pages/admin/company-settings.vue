@@ -7,21 +7,14 @@
       <!-- Left Column: Settings Form -->
       <div class="form-column">
         <div class="tw:card content-card tw:mb-6">
-          <div class="modal-tabs">
-            <button
-              class="tab-btn tw:btn tw:btn-sm tw:btn-ghost"
-              :class="{ active: activeTab === 'details' }"
-              @click="activeTab = 'details'"
-            >Company Details</button>
-            <button
-              class="tab-btn tw:btn tw:btn-sm tw:btn-ghost"
-              :class="{ active: activeTab === 'bank' }"
-              @click="activeTab = 'bank'"
-            >Bank Accounts</button>
+          <div class="tw:tabs company-tabs" role="tablist" aria-label="Company settings">
+            <button v-for="(tab, index) in settingsTabs" :id="`company-tab-${tab.id}`" :key="tab.id" class="tw:tab company-tab" :class="{ 'tw:tab-active': activeTab === tab.id }" type="button" role="tab" :aria-selected="activeTab === tab.id" :aria-controls="`company-panel-${tab.id}`" :tabindex="activeTab === tab.id ? 0 : -1" @click="activeTab = tab.id" @keydown="onTabKeydown($event, index)">
+              <component :is="tab.icon" :size="17" aria-hidden="true" /><span>{{ tab.label }}</span>
+            </button>
           </div>
           <div class="tab-content">
             <!-- Company Details Tab (Merged) -->
-            <div v-if="activeTab === 'details'" class="form-grid">
+            <div v-show="activeTab === 'details'" id="company-panel-details" role="tabpanel" aria-labelledby="company-tab-details" tabindex="0" class="form-grid">
               <div class="section-title full-width tw:mb-2 tw:mt-2">General Information</div>
               <div class="form-group full-width">
                 <label>Company Name <span class="required">*</span></label>
@@ -92,7 +85,7 @@
               </div>
             </div>
             <!-- Bank Accounts Tab -->
-            <div v-if="activeTab === 'bank'">
+            <div v-show="activeTab === 'bank'" id="company-panel-bank" role="tabpanel" aria-labelledby="company-tab-bank" tabindex="0">
               <div class="d-flex tw:justify-between align-center tw:mb-4">
                 <h3 class="tw:text-lg tw:font-semibold">Bank Accounts</h3>
                 <button class="btn-secondary btn-sm tw:btn tw:btn-sm tw:btn-outline" @click="openBankModal()">
@@ -177,11 +170,24 @@ import {
   Edit2,
   Trash2,
   Loader2,
-  Building
+  Building,
+  Landmark
 } from 'lucide-vue-next'
 const config = useRuntimeConfig()
 const toast = useAdminToast()
 const activeTab = ref('details')
+const settingsTabs = [{ id: 'details', label: 'Company Details', icon: Building }, { id: 'bank', label: 'Bank Accounts', icon: Landmark }]
+const onTabKeydown = (event, index) => {
+  let next
+  if (event.key === 'ArrowRight') next = (index + 1) % settingsTabs.length
+  else if (event.key === 'ArrowLeft') next = (index - 1 + settingsTabs.length) % settingsTabs.length
+  else if (event.key === 'Home') next = 0
+  else if (event.key === 'End') next = settingsTabs.length - 1
+  else return
+  event.preventDefault()
+  activeTab.value = settingsTabs[next].id
+  event.currentTarget.parentElement.querySelectorAll('[role="tab"]')[next]?.focus()
+}
 const loading = ref(false)
 const saving = ref(false)
 const bankAccounts = ref([])
@@ -377,31 +383,14 @@ onMounted(() => {
   overflow: hidden;
 }
 
-.modal-tabs {
-  display: flex;
-  gap: 1.5rem;
-  border-bottom: 1px solid rgb(71 37 128 / 10%);
-  padding: 0 1.5rem;
-  background: rgb(71 37 128 / 10%);
-}
-.modal-tabs .tab-btn {
-  background: none;
-  border: none;
-  padding: 1rem 0;
-  color: #80718d;
-  font-weight: 600;
-  font-size: 0.9rem;
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  transition: all 0.2s;
-}
-.modal-tabs .tab-btn:hover {
-  color: var(--color-base-content);
-}
-.modal-tabs .tab-btn.active {
-  color: var(--color-primary);
-  border-bottom-color: var(--color-primary);
-}
+.company-tabs { display: flex; align-items: center; flex-wrap: nowrap; gap: 8px; padding: 16px 24px; border-bottom: 1px solid var(--color-base-300); background: var(--color-base-100); }
+.company-tabs .company-tab { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-width: 0; min-height: 42px; height: auto; padding: 11px 16px; border: 1px solid transparent; border-radius: 8px; background: var(--color-base-200); color: var(--color-base-content); font-size: 12px; font-weight: 600; line-height: 1.4; text-align: center; cursor: pointer; transition: background .15s ease, color .15s ease; }
+.company-tab svg { flex-shrink: 0; }
+.company-tabs .company-tab:hover { background: color-mix(in srgb, var(--color-primary) 12%, var(--color-base-100)); color: var(--color-primary); }
+.company-tabs .company-tab[aria-selected="true"] { background: var(--color-primary); color: var(--color-primary-content); border-color: var(--color-primary); box-shadow: 0 3px 8px rgb(71 37 128 / 12%); }
+.company-tabs .company-tab:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 3px; }
+@media(max-width:600px) { .company-tabs { padding: 14px 16px; gap: 6px; }.company-tabs .company-tab { flex: 1; padding: 10px; font-size: 11px; gap: 6px; } }
+@media(prefers-reduced-motion:reduce) { .company-tabs .company-tab { transition: none; } }
 
 .tab-content {
   padding: 1.5rem;

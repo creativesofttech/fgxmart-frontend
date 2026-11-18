@@ -12,10 +12,10 @@
           <dl class="quick-meta"><template v-if="selectedSku || product.sku"><dt>SKU</dt><dd>{{ selectedSku || product.sku }}</dd></template><template v-if="product.variation_code"><dt>Weight / Volume</dt><dd>{{ product.variation_code }}</dd></template><template v-if="product.hsn_code"><dt>HSN Code</dt><dd>{{ product.hsn_code }}</dd></template></dl>
           <AppSelect v-if="variations.length" v-model="selectedVariationId" :options="variations" label="Choose an option" placeholder="Select an option" :allow-empty="false" />
           <div class="quick-quantity-row"><div><label for="quick-quantity">Quantity</label><div class="quick-quantity"><button type="button" aria-label="Decrease quantity" :disabled="quantity <= 1 || adding" @click="quantity--"><Minus :size="15" /></button><input id="quick-quantity" v-model.number="quantity" type="number" min="1" :max="maximumQuantity" :disabled="adding || stock === 0" @change="normalizeQuantity" /><button type="button" aria-label="Increase quantity" :disabled="quantity >= maximumQuantity || adding || stock === 0" @click="quantity++"><Plus :size="15" /></button></div></div><span class="stock-pill" :class="{ unavailable: stock === 0 }"><span aria-hidden="true" />{{ stock === 0 ? 'Out of stock' : 'Available for enquiry' }}</span></div>
-          <p v-if="variations.length && !selectedVariationId" class="option-hint">Choose an option before adding to your enquiry.</p>
+          <p v-if="variations.length && !selectedVariationId" class="option-hint">Choose an option before adding to your cart.</p>
         </div>
       </div>
-      <footer class="quick-footer"><p class="quick-notice" role="status" aria-live="polite">{{ notice || 'Pick your favourites. Enquire with your list.' }}</p><div class="quick-actions"><NuxtLink :to="`/products/${product.slug}`" class="quick-secondary" @click="close">View details <ArrowUpRight :size="16" /></NuxtLink><button type="button" class="quick-primary" :disabled="adding || !product.id || stock === 0 || (variations.length && !selectedVariationId)" @click="addToEnquiry"><ShoppingCart :size="17" />{{ adding ? 'Adding...' : 'Add to enquiry' }}</button></div></footer>
+      <footer class="quick-footer"><p class="quick-notice" role="status" aria-live="polite">{{ notice || 'Pick your favourites. Enquire with your list.' }}</p><div class="quick-actions"><NuxtLink :to="`/products/${product.slug}`" class="quick-secondary" @click="close">View details <ArrowUpRight :size="16" /></NuxtLink><button type="button" class="quick-primary" :disabled="adding || !product.id || stock === 0 || (variations.length && !selectedVariationId)" @click="addToCart"><ShoppingCart :size="17" />{{ adding ? 'Adding...' : 'Add to cart' }}</button></div></footer>
     </div>
   </dialog>
 </template>
@@ -24,51 +24,54 @@ import { ArrowUpRight, Minus, Plus, ShoppingCart, X } from 'lucide-vue-next'
 import { useCartStore } from '~/stores/cart'
 const props = defineProps({ modelValue: Boolean, product: { type: Object, default: () => ({}) } })
 const emit = defineEmits(['update:modelValue'])
+// Vue prop defaults do not apply when a caller explicitly passes null.
+const product = computed(() => props.product ?? {})
 const dialog = ref(null), quantity = ref(1), selectedVariationId = ref(null), adding = ref(false), notice = ref('')
 const cart = useCartStore()
 let previousFocus
 const close = () => emit('update:modelValue', false)
 const onBackdrop = event => { if (event.target === dialog.value) close() }
 const money = value => new Intl.NumberFormat('en-US', {style:'currency',currency:'USD'}).format(Number(value || 0))
-const variations = computed(() => (props.product.attribute_values || []).map(value => ({
+const variations = computed(() => (product.value.attribute_values || []).map(value => ({
   id: value.id,
   name: `${value.attribute?.name || 'Option'}: ${value.value}`,
-  price: value.pivot?.price != null ? Number(value.pivot.price) : Number(props.product.base_price || 0) + Number(value.pivot?.price_adjustment || 0),
+  price: value.pivot?.price != null ? Number(value.pivot.price) : Number(product.value.base_price || 0) + Number(value.pivot?.price_adjustment || 0),
   stock: Number(value.pivot?.stock || 0), sku: value.pivot?.sku,
   description: Number(value.pivot?.stock || 0) > 0 ? 'Available' : 'Out of stock',
   disabled: Number(value.pivot?.stock || 0) <= 0,
 })))
 const selectedVariation = computed(() => variations.value.find(value => value.id === selectedVariationId.value))
-const currentPrice = computed(() => selectedVariation.value?.price ?? props.product.discount_price ?? props.product.base_price ?? 0)
+const currentPrice = computed(() => selectedVariation.value?.price ?? product.value.discount_price ?? product.value.base_price ?? 0)
 const selectedSku = computed(() => selectedVariation.value?.sku)
-const discountPercent = computed(() => !selectedVariation.value && Number(props.product.base_price) > Number(currentPrice.value) ? Math.round((Number(props.product.base_price) - Number(currentPrice.value)) / Number(props.product.base_price) * 100) : 0)
-const stock = computed(() => selectedVariation.value ? selectedVariation.value.stock : props.product.stock_quantity == null ? null : Number(props.product.stock_quantity))
+const discountPercent = computed(() => !selectedVariation.value && Number(product.value.base_price) > Number(currentPrice.value) ? Math.round((Number(product.value.base_price) - Number(currentPrice.value)) / Number(product.value.base_price) * 100) : 0)
+const stock = computed(() => selectedVariation.value ? selectedVariation.value.stock : product.value.stock_quantity == null ? null : Number(product.value.stock_quantity))
 const maximumQuantity = computed(() => stock.value == null ? 999 : Math.max(1, stock.value))
 const normalizeQuantity = () => { quantity.value = Math.min(maximumQuantity.value, Math.max(1, Math.floor(Number(quantity.value) || 1))) }
 watch(selectedVariationId, () => { quantity.value = 1; notice.value = '' })
 const reset = () => { quantity.value = 1; selectedVariationId.value = null; notice.value = '' }
-watch(() => props.product.id, reset)
+watch(() => product.value.id, reset)
 watchEffect(() => {
   if (!dialog.value) return
-  if (props.modelValue && !dialog.value.open) { previousFocus = document.activeElement; reset(); dialog.value.showModal() }
-  else if (!props.modelValue && dialog.value.open) { dialog.value.close(); previousFocus?.focus?.() }
+  const shouldOpen = props.modelValue && Boolean(product.value.id)
+  if (shouldOpen && !dialog.value.open) { previousFocus = document.activeElement; reset(); dialog.value.showModal() }
+  else if (!shouldOpen && dialog.value.open) { dialog.value.close(); previousFocus?.focus?.() }
 })
 const route = useRoute()
 watch(() => route.fullPath, close)
 const { gtag } = useGtag()
 watch(() => props.modelValue, opened => {
-  if (opened && props.product.id) gtag('event', 'view_item', {currency:'USD',value:Number(currentPrice.value),items:[{item_id:props.product.id,item_name:props.product.name,item_category:props.product.category?.name,price:Number(currentPrice.value),quantity:1}]})
+  if (opened && product.value.id) gtag('event', 'view_item', {currency:'USD',value:Number(currentPrice.value),items:[{item_id:product.value.id,item_name:product.value.name,item_category:product.value.category?.name,price:Number(currentPrice.value),quantity:1}]})
 })
-const addToEnquiry = async () => {
-  if (adding.value || !props.product.id || stock.value === 0 || (variations.value.length && !selectedVariation.value)) return
+const addToCart = async () => {
+  if (adding.value || !product.value.id || stock.value === 0 || (variations.value.length && !selectedVariation.value)) return
   normalizeQuantity(); adding.value = true; notice.value = ''
   const options = selectedVariation.value ? {variation_id:selectedVariation.value.id,name:selectedVariation.value.name} : null
-  const inCart = () => cart.items.filter(item => item.product_id === props.product.id && (item.options?.variation_id || null) === (options?.variation_id || null)).reduce((sum,item) => sum + item.quantity,0)
+  const inCart = () => cart.items.filter(item => item.product_id === product.value.id && (item.options?.variation_id || null) === (options?.variation_id || null)).reduce((sum,item) => sum + item.quantity,0)
   const before = inCart()
   try {
-    await cart.addToCart(props.product, quantity.value, options)
+    await cart.addToCart(product.value, quantity.value, options)
     if (inCart() < before + quantity.value) throw new Error('Unable to add product')
-    notice.value = `${quantity.value} ${quantity.value === 1 ? 'item' : 'items'} added to your enquiry.`
+    notice.value = `${quantity.value} ${quantity.value === 1 ? 'item' : 'items'} added to your cart.`
   } catch { notice.value = 'Unable to add this product. Please try again.' }
   finally { adding.value = false }
 }

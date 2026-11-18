@@ -20,9 +20,9 @@
       </div>
       <p v-else class="preview-description">New everyday favourites are on their way.</p>
       <NuxtLink v-if="hasVariations" :to="productLink" class="tw:btn tw:btn-primary enquiry-button"><ShoppingCart :size="16" aria-hidden="true" /> Choose options</NuxtLink>
-      <button v-else class="tw:btn tw:btn-primary enquiry-button" type="button" :disabled="!product || adding" @click="addToEnquiry">
+      <button v-else class="tw:btn tw:btn-primary enquiry-button" type="button" :disabled="!product || adding" @click="addToCart">
         <Check v-if="added" :size="16" aria-hidden="true" /><ShoppingCart v-else-if="product" :size="16" aria-hidden="true" /><Clock3 v-else :size="15" aria-hidden="true" />
-        {{ !product ? 'Coming soon' : adding ? 'Adding…' : added ? 'Added to enquiry' : 'Add to Enquiry' }}
+        {{ !product ? 'Coming soon' : adding ? 'Adding…' : added ? 'Added to cart' : 'Add to cart' }}
       </button>
     </div>
   </motion.article>
@@ -53,15 +53,15 @@ const isWished = computed(() => props.product ? wishlist.isInWishlist(props.prod
 const money = value => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(Number(value))
 const quantityInCart = () => cart.items.filter(item => item.product_id === props.product.id).reduce((sum, item) => sum + item.quantity, 0)
 
-const addToEnquiry = async () => {
+const addToCart = async () => {
   if (!props.product || adding.value) return
   adding.value = true
   const before = quantityInCart()
   try {
     await cart.addToCart(props.product, 1)
-    if (quantityInCart() <= before) throw new Error('Unable to update enquiry')
+    if (quantityInCart() <= before) throw new Error('Unable to update cart')
     added.value = true
-    emit('notice', `${props.product.name} added to your enquiry.`)
+    emit('notice', `${props.product.name} added to your cart.`)
     clearTimeout(feedbackTimer)
     feedbackTimer = setTimeout(() => { added.value = false }, 2500)
   } catch { emit('notice', 'We couldn’t add that product. Please try again.') }

@@ -61,16 +61,16 @@
         </h3>
       </NuxtLink>
 
-      <div class="d-flex align-center mb-2">
+      <div v-if="product.reviews_count > 0" class="d-flex align-center mb-2">
         <v-rating
-          :model-value="4" 
+          :model-value="Number(product.rating_average || 0)"
           color="warning"
           density="compact"
           size="x-small"
           half-increments
           readonly
         ></v-rating>
-        <span class="text-caption text-grey ml-1">(4.0)</span>
+        <span class="text-caption text-grey ml-1">({{ Number(product.rating_average || 0).toFixed(1) }})</span>
       </div>
 
       <div class="d-flex align-center justify-space-between mt-auto">

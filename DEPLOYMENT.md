@@ -97,3 +97,5 @@ php artisan test
 ```
 
 These include rejection of customer bearer tokens on every registered protected admin route, scoped token expiry, permission denial, logout revocation, and admin status-log identity. Also verify a real admin login, product upload/edit, order status update, storefront checkout, and PDF download against staging before production rollout.
+
+Legal pages use backend resources/content/legal/*.json as bundled defaults and storage/app/private/legal-pages/*.json for admin-saved overrides. Keep the override directory writable and persistent across deployments and back it up. Run php artisan migrate to install legal-pages.index/edit permissions; Super Admin can access both editors automatically. No content seeding is required. Review the starter policy wording for the business before production use; backend docs-legal-pages.md describes direct JSON editing.
