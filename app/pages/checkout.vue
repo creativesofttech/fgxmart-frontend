@@ -427,6 +427,7 @@ import logoImg from "~/assets/images/brand/fgx-logo.png"
 import { useAuthStore } from '~/stores/auth'
 import { useCartStore } from '~/stores/cart'
 import { useAddressStore } from '~/stores/address'
+import { fetchActiveCountries } from '~/utils/countries'
 
 definePageMeta({
   middleware: ['auth']
@@ -479,8 +480,7 @@ onMounted(async () => {
 
     // Fetch Countries
     try {
-        const { data } = await $fetch(`${config.public.apiBase}/countries`)
-        countries.value = data || []
+        countries.value = await fetchActiveCountries(config.public.apiBase)
         if (countries.value.length > 0) {
             addressForm.value.country_id = countries.value[0].id
         }

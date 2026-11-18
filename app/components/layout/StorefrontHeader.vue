@@ -15,7 +15,7 @@
 
         <button class="location-trigger" type="button" @click="openLocation">
           <MapPin :size="19" aria-hidden="true" />
-          <span><small>Shopping from</small><strong>{{ selectedCountry?.name || 'Choose location' }}</strong></span>
+          <span><small>Shopping from</small><strong :title="locationLabel">{{ locationLabel }}</strong></span>
           <ChevronDown :size="13" aria-hidden="true" />
         </button>
 
@@ -53,25 +53,39 @@
       </div>
     </div>
 
-    <dialog ref="locationDialog" class="tw:modal location-modal" data-theme="fgx" aria-labelledby="location-title" @click="closeLocationOnBackdrop">
+    <dialog ref="locationDialog" class="tw:modal location-modal" data-theme="fgx" aria-labelledby="location-title" @cancel.prevent="closeLocation" @click="closeLocationOnBackdrop">
       <div class="tw:modal-box location-box">
-        <div class="location-heading"><span class="location-symbol"><MapPin :size="23" aria-hidden="true" /></span><button class="tw:btn tw:btn-ghost tw:btn-circle tw:btn-sm" type="button" aria-label="Close location selector" @click="locationDialog.close()"><X :size="19" aria-hidden="true" /></button></div>
-        <h2 id="location-title">Where are you shopping from?</h2>
-        <p class="location-description">Choose your country for your shopping enquiries.</p>
+        <div class="location-heading"><span class="location-symbol"><MapPin :size="23" aria-hidden="true" /></span><button class="tw:btn tw:btn-ghost tw:btn-circle tw:btn-sm" type="button" aria-label="Close location selector" @click="closeLocation"><X :size="19" aria-hidden="true" /></button></div>
+        <h2 id="location-title">{{ locationStep === 'country' ? 'Where are you shopping from?' : 'Choose your zipcode' }}</h2>
+        <p class="location-description">{{ locationStep === 'country' ? 'Choose your country for your shopping enquiries.' : `Select a zipcode for ${pendingCountry?.name || 'your country'}.` }}</p>
+        <template v-if="locationStep === 'country'">
         <label for="country-search" class="sr-only">Search countries</label>
         <input id="country-search" v-model="countrySearch" class="tw:input country-search" type="search" placeholder="Search your country" />
         <p v-if="countriesLoading" class="location-status" role="status">Loading countries…</p>
         <p v-else-if="countriesError" class="location-status" role="alert">We couldn't load countries. <button type="button" @click="loadCountries">Try again</button></p>
-        <ul v-else class="tw:menu country-list">
-          <li v-for="country in filteredCountries" :key="country.id"><button type="button" @click="selectCountry(country)"><span>{{ country.name }}</span><Check v-if="selectedCountry?.id === country.id" :size="17" aria-label="Selected" /></button></li>
+        <ul v-else class="country-list">
+          <li v-for="country in filteredCountries" :key="country.id"><button type="button" :aria-pressed="selectedCountry?.id === country.id" @click="selectCountry(country)"><span>{{ country.name }}</span><Check v-if="selectedCountry?.id === country.id" :size="17" aria-hidden="true" /></button></li>
           <li v-if="!filteredCountries.length" class="location-status">No countries found.</li>
         </ul>
+        </template>
+        <template v-else>
+          <button type="button" class="change-country" @click="showCountries">Change country</button>
+          <label for="zipcode-search" class="sr-only">Search zipcodes</label>
+          <input id="zipcode-search" ref="zipcodeSearchInput" v-model="zipcodeSearch" class="tw:input country-search" type="search" placeholder="Search your zipcode" />
+          <p v-if="zipcodesLoading" class="location-status" role="status">Loading zipcodes...</p>
+          <p v-else-if="zipcodesError" class="location-status" role="alert">We couldn't load zipcodes. <button type="button" @click="selectCountry(pendingCountry)">Try again</button></p>
+          <ul v-else class="country-list zipcode-list">
+            <li v-for="zipcode in filteredZipcodes" :key="zipcode"><button type="button" :aria-pressed="selectedCountry?.id === pendingCountry?.id && selectedCountry?.zipcode === zipcode" @click="completeLocation(pendingCountry, zipcode)"><span>{{ zipcode }}</span><Check v-if="selectedCountry?.id === pendingCountry?.id && selectedCountry?.zipcode === zipcode" :size="17" aria-hidden="true" /></button></li>
+            <li v-if="!filteredZipcodes.length" class="location-status">No zipcodes found.</li>
+          </ul>
+        </template>
       </div>
     </dialog>
   </header>
 </template>
 
 <script setup>
+import { fetchActiveCountries } from '~/utils/countries'
 import { ArrowUpRight, Check, ChevronDown, Heart, MapPin, MessageCircle, Package, PackageCheck, Search, ShoppingCart, UserRound, X } from 'lucide-vue-next'
 import StorefrontCategories from '~/components/layout/StorefrontCategories.vue'
 import { useAuthStore } from '~/stores/auth'
@@ -86,10 +100,18 @@ const wishlist = useWishlistStore()
 const searchQuery = ref('')
 const locationDialog = useTemplateRef('locationDialog')
 const selectedCountry = useState('storefront-country', () => null)
+const hasSavedAddress = ref(false)
 const countrySearch = ref('')
 const countries = ref([])
 const countriesLoading = ref(false)
 const countriesError = ref(false)
+const locationStep = ref('country')
+const pendingCountry = ref(null)
+const zipcodes = ref([]), zipcodeSearch = ref(''), zipcodesLoading = ref(false), zipcodesError = ref(false)
+const zipcodeSearchInput = ref(null)
+const locationLabel = computed(() => selectedCountry.value ? selectedCountry.value.name + (selectedCountry.value.zipcode ? ' · ' + selectedCountry.value.zipcode : '') : 'Choose location')
+const filteredZipcodes = computed(() => zipcodes.value.filter(code => code.toLowerCase().includes(zipcodeSearch.value.trim().toLowerCase())))
+let selectionVersion = 0
 
 const [categories, { data: pagesResponse }] = await Promise.all([
   useStorefrontCategories(),
@@ -108,7 +130,7 @@ const isShoppingLinkActive = link => link.label === 'Hot Deals'
 const filteredCountries = computed(() => countries.value.filter(country => country.name.toLowerCase().includes(countrySearch.value.trim().toLowerCase())))
 
 watch(() => route.query.search, value => { searchQuery.value = typeof value === 'string' ? value : '' }, { immediate: true })
-watch(() => route.fullPath, () => { locationDialog.value?.close() })
+watch(() => route.fullPath, () => closeLocation())
 
 const submitSearch = () => {
   const search = searchQuery.value.trim()
@@ -118,26 +140,87 @@ const loadCountries = async () => {
   countriesLoading.value = true
   countriesError.value = false
   try {
-    const response = await $fetch(`${config.public.apiBase}/countries`, { query: { all: 1 } })
-    countries.value = (response.data || []).filter(country => country.status !== false)
+    countries.value = await fetchActiveCountries(config.public.apiBase)
   } catch { countriesError.value = true }
   finally { countriesLoading.value = false }
 }
+const closeLocation = () => { selectionVersion++; zipcodesLoading.value = false; locationDialog.value?.close() }
+const showCountries = () => {
+  selectionVersion++; locationStep.value = 'country'; countrySearch.value = ''; zipcodeSearch.value = ''; zipcodesError.value = false; zipcodesLoading.value = false
+}
 const openLocation = () => {
-  locationDialog.value?.showModal()
+  showCountries(); locationDialog.value?.showModal()
   if (!countries.value.length && !countriesLoading.value) loadCountries()
 }
-const closeLocationOnBackdrop = event => { if (event.target === locationDialog.value) locationDialog.value.close() }
-const selectCountry = country => {
-  selectedCountry.value = { id: country.id, name: country.name }
-  try { localStorage.setItem('fgx-country', JSON.stringify(selectedCountry.value)) } catch {}
-  locationDialog.value.close()
+const closeLocationOnBackdrop = event => { if (event.target === locationDialog.value) closeLocation() }
+const completeLocation = (country, zipcode = null) => {
+  if (!country) return
+  selectedCountry.value = { id: country.id, name: country.name, zipcode }
+  if (!hasSavedAddress.value) {
+    try { localStorage.setItem('fgx-country', JSON.stringify(selectedCountry.value)) } catch {}
+  }
+  closeLocation()
+}
+const countryZipcodes = async country => {
+  const response = await $fetch(config.public.apiBase + '/countries/' + encodeURIComponent(country.id) + '/zipcodes')
+  return [...new Set((response.data || []).filter(code => typeof code === 'string' && code.trim()).map(code => code.trim()))]
+}
+const selectCountry = async country => {
+  if (!country) return
+  const version = ++selectionVersion
+  pendingCountry.value = country; locationStep.value = 'zipcode'; zipcodeSearch.value = ''; zipcodes.value = []; zipcodesError.value = false; zipcodesLoading.value = true
+  await nextTick(); zipcodeSearchInput.value?.focus({ preventScroll: true })
+  try {
+    const codes = await countryZipcodes(country)
+    if (version !== selectionVersion) return
+    zipcodes.value = codes
+    if (!codes.length) completeLocation(country)
+  } catch { if (version === selectionVersion) zipcodesError.value = true }
+  finally { if (version === selectionVersion) zipcodesLoading.value = false }
+}
+const initializeLocation = async () => {
+  closeLocation()
+  const version = selectionVersion
+  const token = auth.token
+  hasSavedAddress.value = false
+  if (token) {
+    try {
+      const response = await $fetch(config.public.apiBase + '/addresses', { headers: { Authorization: `Bearer ${token}` } })
+      if (version !== selectionVersion || token !== auth.token) return
+      const addresses = [...(response.data || [])].sort((a, b) => Number(!!b.is_default) - Number(!!a.is_default))
+      const address = addresses.find(address => address.country?.id && address.country?.name && address.country.status !== false)
+      if (address) {
+        hasSavedAddress.value = true
+        completeLocation(address.country, address.zipcode || null)
+        return
+      }
+    } catch {
+      if (version !== selectionVersion || token !== auth.token) return
+      // Keep the browser preference usable when saved addresses cannot be loaded.
+    }
+  }
+  let stored
+  try { stored = JSON.parse(localStorage.getItem('fgx-country') || 'null') } catch {}
+  if (!stored || typeof stored.name !== 'string' || !Number.isInteger(stored.id)) { openLocation(); return }
+  selectedCountry.value = { id: stored.id, name: stored.name, zipcode: typeof stored.zipcode === 'string' ? stored.zipcode : null }
+  await loadCountries()
+  if (version !== selectionVersion || countriesError.value) return
+  const country = countries.value.find(country => country.id === stored.id)
+  if (!country) { selectedCountry.value = null; try { localStorage.removeItem('fgx-country') } catch {}; openLocation(); return }
+  try {
+    const codes = await countryZipcodes(country)
+    if (version !== selectionVersion) return
+    if (!codes.length || codes.includes(stored.zipcode)) { completeLocation(country, codes.length ? stored.zipcode : null); return }
+    pendingCountry.value = country; zipcodes.value = codes; locationStep.value = 'zipcode'; locationDialog.value?.showModal()
+  } catch {
+    if (version !== selectionVersion) return
+    pendingCountry.value = country; locationStep.value = 'zipcode'; zipcodesError.value = true; locationDialog.value?.showModal()
+  }
 }
 onMounted(() => {
-  try {
-    const stored = JSON.parse(localStorage.getItem('fgx-country') || 'null')
-    if (stored && typeof stored.name === 'string' && typeof stored.id === 'number') selectedCountry.value = stored
-  } catch {}
+  auth.init()
+  initializeLocation()
+  watch(() => auth.token, initializeLocation)
 })
 </script>
 
@@ -182,15 +265,20 @@ onMounted(() => {
 .mobile-location { display: none; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 .location-modal::backdrop { background: rgb(28 16 46 / 40%); backdrop-filter: blur(3px); }
-.location-box { background: white; color: #241736; padding: 28px; width: min(460px, calc(100vw - 32px)); border-radius: 18px; }
+.location-box { background: white; color: #241736; padding: 28px; width: min(600px, calc(100vw - 32px)); max-width: 600px; border-radius: 18px; }
 .location-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
 .location-symbol { display: grid; place-items: center; width: 45px; height: 45px; color: #472580; background: #f0eaf8; border-radius: 12px; }
 .location-box h2 { font-size: 22px; letter-spacing: -.5px; font-weight: 700; }
 .location-description { font-size: 12px; color: #8a7d94; margin: 8px 0 20px; }
 .country-search { width: 100%; font-size: 13px; padding: 10px 14px; border: 1px solid #e3dbeb; border-radius: 8px; height: 43px; color: #332344; }
-.country-list { max-height: 290px; overflow: auto; margin-top: 12px; padding: 0; }
-.country-list button { display: flex; justify-content: space-between; width: 100%; padding: 12px; font-size: 13px; border-radius: 7px; }
+.country-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 8px; max-height: 320px; overflow-y: auto; overflow-x: hidden; margin: 12px 0 0; padding: 0; list-style: none; }
+.country-list li { min-width: 0; }
+.country-list button { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; padding: 12px; font-size: 13px; border-radius: 7px; text-align: left; }
+.country-list button span { min-width: 0; overflow-wrap: anywhere; }
+.country-list button svg { flex-shrink: 0; }
+.change-country { margin: -6px 0 14px; padding: 0; border: 0; background: transparent; color: #78519a; font-size: 12px; text-decoration: underline; cursor: pointer; }
 .country-list button:hover { background: #f5f0fb; }
+@media(max-width:480px) { .country-list { grid-template-columns: 1fr; } .location-box { padding: 22px; } }
 .location-status { padding: 20px 0; font-size: 12px; color: #8a7d94; }
 .location-status button { text-decoration: underline; color: #472580; }
 @media (max-width: 1280px) { .main-header { grid-template-columns: 163px minmax(200px, 1fr) auto; gap: 24px; } .brand-link img { width: 163px; } .location-trigger { display: none; } .header-actions { gap: 18px; } .nav-inner { gap: 32px; } .primary-nav { gap: 24px; } .mobile-location { display: flex; color: #472580; } }

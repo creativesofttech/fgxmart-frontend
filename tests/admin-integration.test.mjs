@@ -45,7 +45,16 @@ const dashboardFixture = (days = 30, restricted = false) => {
 let publicProductMode = 'normal'
 let zipcodeFixtures = []
 const zipcodeCountries = [{ id: 1, name: 'India', code: 'IN' }, { id: 2, name: 'United States', code: 'US' }]
+const countryFixtures = ['Australia', 'Bangladesh', 'Brazil', 'Canada', 'China', 'Egypt', 'France', 'Germany', 'India', 'Indonesia', 'Japan', 'Nigeria', 'Pakistan', 'Russia', 'Saudi Arabia', 'South Africa', 'Turkey', 'United Arab Emirates', 'United Kingdom', 'United States'].map((name, index) => ({ id: index + 1, name, status: name !== 'China' }))
 let base, upstream, app, output = '', sessionCookie, browser
+let zipcodeLookupFailure = false
+const newTestContext = async (options = {}, savedLocation = true) => {
+  const context = await browser.newContext(options)
+  if (savedLocation) await context.addInitScript(() => {
+    if (!localStorage.getItem('fgx-country')) localStorage.setItem('fgx-country', JSON.stringify({id:1,name:'Australia',zipcode:null}))
+  })
+  return context
+}
 const adminPaths = ['/admin', '/admin/dashboard', '/admin/analytics', '/admin/products', '/admin/products/create', '/admin/products/1/edit', '/admin/categories', '/admin/brands', '/admin/attributes', '/admin/countries', '/admin/zipcodes', '/admin/orders', '/admin/orders/FGX-TEST', '/admin/company-settings', '/admin/faqs', '/admin/pages', '/admin/pages/create', '/admin/pages/edit/1', '/admin/roles', '/admin/roles/create', '/admin/roles/1', '/admin/permissions']
 
 before(async () => {
@@ -101,6 +110,15 @@ before(async () => {
       if (url.pathname.endsWith('/attributes')) return send(200, { data: [{ id: 1, name: 'Size', values: [{ id: 10, value: 'Small' }, { id: 11, value: 'Large' }] }] })
       return send(200, { status: 'success', data: [], total: 0, current_page: 1, last_page: 1 })
     }
+    if (/^\/api\/v1\/countries\/\d+\/zipcodes$/.test(url.pathname)) {
+      if (zipcodeLookupFailure) return send(500, {message:'Lookup failed'})
+      const countryId = Number(url.pathname.split('/').at(-2))
+      const country = countryFixtures.find(country => country.id === countryId && country.status)
+      if (!country) return send(404, {message:'Not found'})
+      const saved = zipcodeFixtures.find(row => row.country_id === countryId)?.zipcodes || ''
+      return send(200, {data:saved.split(',').map(code=>code.trim()).filter(Boolean)})
+    }
+    if (url.pathname === '/api/v1/countries') return send(200, { data: url.searchParams.has('all') ? countryFixtures : countryFixtures.slice(0, 10), total: countryFixtures.length })
     if (url.pathname.endsWith('/company-info')) return send(200, { status: 'success', data: { company: null, bank: null } })
     if (url.pathname.endsWith('/categories')) return send(200, { data: categoryFixtures.map(category => renamedCategory && category.id === 1 ? { ...category, name: 'Food & Pantry', short_description: 'A description edited in admin', image_url: '/assets/images/home/cat-4.webp' } : category) })
     if (url.pathname.endsWith('/products')) {
@@ -239,7 +257,7 @@ test('proxy hides backend debug errors and rejects unknown resources', async () 
 
 test('browser login, admin navigation, category save, storefront isolation and logout work', { timeout: 120_000 }, async () => {
   browser = await chromium.launch({ headless: true, ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE } : {}) })
-  const context = await browser.newContext()
+  const context = await newTestContext()
   const page = await context.newPage()
   const errors = []
   page.on('pageerror', error => errors.push(error.message))
@@ -308,7 +326,7 @@ test('browser login, admin navigation, category save, storefront isolation and l
 })
 
 test('daisyUI admin screens render and category dialogs remain usable on mobile', { timeout: 120_000 }, async () => {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } })
+  const context = await newTestContext({ viewport: { width: 1440, height: 1000 } })
   const page = await context.newPage()
   const errors = []
   page.on('pageerror', error => errors.push(`${page.url()}: ${error.message}`))
@@ -372,7 +390,7 @@ test('homepage serves the supplied assets and renders its content without JavaSc
 })
 
 test('new storefront UI supports desktop, mobile, search, location dialog and reduced motion', { timeout: 120_000 }, async () => {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } })
+  const context = await newTestContext({ viewport: { width: 1440, height: 900 } })
   const page = await context.newPage()
   const errors = []
   page.on('pageerror', error => errors.push(error.message))
@@ -414,7 +432,7 @@ test('new storefront UI supports desktop, mobile, search, location dialog and re
 })
 
 test('category and featured cards use WebP assets and connect to wishlist and enquiry selection', { timeout: 120_000 }, async () => {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 1100 }, reducedMotion: 'reduce' })
+  const context = await newTestContext({ viewport: { width: 1440, height: 1100 }, reducedMotion: 'reduce' })
   const page = await context.newPage()
   const errors = []
   page.on('pageerror', error => errors.push(error.message))
@@ -469,7 +487,7 @@ test('featured products fall back to latest items, and empty catalogues have non
     assert.ok(calls.some(request => request.url.includes('is_featured=1')))
     assert.ok(calls.some(request => !request.url.includes('is_featured')))
     publicProductMode = 'empty'
-    const context = await browser.newContext({ viewport: { width: 1440, height: 1100 }, reducedMotion: 'reduce' })
+    const context = await newTestContext({ viewport: { width: 1440, height: 1100 }, reducedMotion: 'reduce' })
     const page = await context.newPage()
     await page.goto(`${base}/`)
     assert.equal(await page.locator('.catalogue-card.is-preview').count(), 4)
@@ -483,7 +501,7 @@ test('featured products fall back to latest items, and empty catalogues have non
 })
 
 test('shopping navigation opens dedicated collection pages and explicit hot deals without focus borders', async () => {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' })
+  const context = await newTestContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' })
   const page = await context.newPage()
   await page.goto(`${base}/`)
   const nav = page.getByRole('navigation', { name: 'Main navigation', exact: true })
@@ -521,7 +539,7 @@ test('shopping navigation opens dedicated collection pages and explicit hot deal
 
 test('category cards follow admin data and child flyouts support touch and keyboard', async () => {
   renamedCategory = true
-  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' })
+  const context = await newTestContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' })
   try {
     const page = await context.newPage()
     await page.goto(`${base}/`, { waitUntil: 'networkidle' })
@@ -557,7 +575,7 @@ test('category cards follow admin data and child flyouts support touch and keybo
 })
 
 test('customer login design handles errors, password visibility, selection sync and safe redirects', async () => {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' })
+  const context = await newTestContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' })
   await context.addInitScript(() => {
     if (!localStorage.getItem('auth_token')) {
       localStorage.setItem('guest_cart', JSON.stringify([{ product_id: 1, quantity: 2 }]))
@@ -591,7 +609,7 @@ test('customer login design handles errors, password visibility, selection sync 
 })
 
 test('customer registration uses matching passwords and fits mobile screens', async () => {
-  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' })
+  const context = await newTestContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' })
   const page = await context.newPage()
   await page.goto(`${base}/login?redirect=https://example.test/`)
   await page.getByRole('button', { name: 'Create account', exact: true }).click()
@@ -612,7 +630,7 @@ test('customer registration uses matching passwords and fits mobile screens', as
 })
 
 test('admin access artwork, floating cards, reduced motion and password help work', async () => {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 950 }, reducedMotion: 'no-preference' })
+  const context = await newTestContext({ viewport: { width: 1440, height: 950 }, reducedMotion: 'no-preference' })
   const page = await context.newPage()
   const errors = []; page.on('pageerror', error => errors.push(error.message))
   await page.goto(`${base}/admin-access`, { waitUntil: 'networkidle' })
@@ -643,8 +661,8 @@ test('admin access artwork, floating cards, reduced motion and password help wor
 })
 
 test('dashboard uses live aggregate data, date ranges, empty states and resource permissions', { timeout: 120_000 }, async () => {
-  const context = await browser.newContext({ viewport: { width: 1600, height: 1100 }, reducedMotion: 'reduce' })
-  const restrictedContext = await browser.newContext()
+  const context = await newTestContext({ viewport: { width: 1600, height: 1100 }, reducedMotion: 'reduce' })
+  const restrictedContext = await newTestContext()
   try {
     const page = await context.newPage()
     const errors = []; page.on('pageerror', error => errors.push(error.message))
@@ -694,7 +712,7 @@ test('dashboard uses live aggregate data, date ranges, empty states and resource
 })
 
 test('shared admin dialogs keep focused fields and footer actions inside their padded card', { timeout: 120_000 }, async () => {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' })
+  const context = await newTestContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' })
   const page = await context.newPage()
   await page.goto(`${base}/admin-access`)
   await page.getByLabel('Email address', { exact: true }).fill('admin@example.test')
@@ -738,7 +756,7 @@ test('shared admin dialogs keep focused fields and footer actions inside their p
 })
 
 test('custom dropdowns support search, keyboard selection, clear and dialog layering', { timeout: 120_000 }, async () => {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' })
+  const context = await newTestContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' })
   const page = await context.newPage()
   const errors = []; page.on('pageerror', error => errors.push(error.message))
   await page.goto(`${base}/admin-access`)
@@ -802,7 +820,7 @@ test('custom dropdowns support search, keyboard selection, clear and dialog laye
 })
 
 test('Tiptap product descriptions keep tag and font changes local and save HTML on create and edit', { timeout: 120_000 }, async () => {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' })
+  const context = await newTestContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' })
   const page = await context.newPage()
   const errors = []; page.on('pageerror', error => errors.push(error.message))
   await page.goto(`${base}/admin-access`, { waitUntil: 'networkidle' })
@@ -866,7 +884,7 @@ test('Tiptap product descriptions keep tag and font changes local and save HTML 
 })
 
 test('product forms use dependent categories, preserve HSN codes and left-align dropdown options', { timeout: 120_000 }, async () => {
-  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' })
+  const context = await newTestContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' })
   const page = await context.newPage(); const errors=[]; page.on('pageerror', error=>errors.push(error.message))
   await page.goto(`${base}/admin-access`, { waitUntil: 'networkidle' })
   await page.getByLabel('Email address', { exact: true }).fill('admin@example.test')
@@ -923,7 +941,7 @@ test('product forms use dependent categories, preserve HSN codes and left-align 
 })
 
 test('zipcode management appears below Countries and supports country selection, validation, edit and delete', { timeout: 120_000 }, async () => {
-  const context = await browser.newContext({ viewport: { width:1440, height:1000 }, reducedMotion:'reduce' })
+  const context = await newTestContext({ viewport: { width:1440, height:1000 }, reducedMotion:'reduce' })
   const page = await context.newPage(); const errors=[]; page.on('pageerror', error=>errors.push(error.message))
   await page.goto(`${base}/admin-access`, { waitUntil:'networkidle' })
   await page.getByLabel('Email address', { exact:true }).fill('admin@example.test')
@@ -967,7 +985,7 @@ test('zipcode management appears below Countries and supports country selection,
 })
 
 test('homepage switches persist on create and edit and collections use real product images with fallbacks', {timeout:120_000}, async () => {
-  const context=await browser.newContext({viewport:{width:1440,height:1000},reducedMotion:'reduce'})
+  const context=await newTestContext({viewport:{width:1440,height:1000},reducedMotion:'reduce'})
   const page=await context.newPage();const errors=[];page.on('pageerror',error=>errors.push(error.message))
   await page.goto(`${base}/admin-access`,{waitUntil:'networkidle'})
   await page.getByLabel('Email address',{exact:true}).fill('admin@example.test');await page.getByLabel('Password',{exact:true}).fill('fixture-password')
@@ -1011,7 +1029,7 @@ test('homepage switches persist on create and edit and collections use real prod
 })
 
 test('category checkboxes expand child categories, combine filters and keep logos free of focus borders', {timeout:120_000}, async () => {
-  const context=await browser.newContext({viewport:{width:1440,height:1000},reducedMotion:'reduce'})
+  const context=await newTestContext({viewport:{width:1440,height:1000},reducedMotion:'reduce'})
   const page=await context.newPage();const errors=[];page.on('pageerror',error=>errors.push(error.message))
   const previous=publicProducts.map(item=>item.category_id)
   publicProducts.forEach((item,index)=>item.category_id=[2,3,4,5][index])
@@ -1055,7 +1073,7 @@ test('category checkboxes expand child categories, combine filters and keep logo
 })
 
 test('quick view shows only the short summary and supports compact mobile layout, enquiry and options', {timeout:120_000}, async () => {
-  const context=await browser.newContext({viewport:{width:1440,height:1000},reducedMotion:'reduce'})
+  const context=await newTestContext({viewport:{width:1440,height:1000},reducedMotion:'reduce'})
   const page=await context.newPage();const errors=[];page.on('pageerror',error=>errors.push(error.message))
   const original={summary:product.summary,description:product.description,attribute_values:product.attribute_values}
   try {
@@ -1103,7 +1121,7 @@ test('quick view shows only the short summary and supports compact mobile layout
 })
 
 test('Poppins is self-hosted and consistent across storefront, auth, admin, inputs and dropdowns', {timeout:120_000}, async () => {
-  const context=await browser.newContext({viewport:{width:1440,height:1000},reducedMotion:'reduce'})
+  const context=await newTestContext({viewport:{width:1440,height:1000},reducedMotion:'reduce'})
   const page=await context.newPage();const fontRequests=[];page.on('request',request=>{if(request.url().includes('poppins')&&request.url().includes('.woff2'))fontRequests.push(request.url())})
   const checkFonts=async () => {
     await page.evaluate(()=>document.fonts.ready)
@@ -1126,4 +1144,129 @@ test('Poppins is self-hosted and consistent across storefront, auth, admin, inpu
   assert.ok(fontRequests.length>0)
   assert.ok(fontRequests.every(url=>url.startsWith(base)))
   await context.close()
+})
+
+test('checkout and header share every active country and the wider popup has no horizontal overflow', {timeout:120_000}, async () => {
+  const context=await newTestContext({viewport:{width:1440,height:1000},reducedMotion:'reduce'})
+  await context.addInitScript(product => {
+    if (!localStorage.getItem('auth_token')) localStorage.setItem('guest_cart', JSON.stringify([{product_id:product.id,product,quantity:1,options:null}]))
+  }, product)
+  const page=await context.newPage();const errors=[];page.on('pageerror',error=>errors.push(error.message))
+  await page.route('**/api/v1/cart',route=>route.fulfill({json:[{id:1,product_id:1,product,quantity:1,options:null}]}))
+  await page.goto(`${base}/login?redirect=/checkout`,{waitUntil:'networkidle'})
+  await page.getByLabel('Email address',{exact:true}).fill('countries@example.test')
+  await page.getByLabel('Password',{exact:true}).fill('customer-password')
+  await page.getByRole('button',{name:'Login',exact:true}).click()
+  await page.waitForURL('**/checkout');await page.getByRole('combobox',{name:'Country',exact:true}).waitFor()
+  await page.getByRole('combobox',{name:'Country',exact:true}).click()
+  await page.getByRole('option',{name:'United States',exact:true}).waitFor()
+  const checkoutCountries=await page.locator('.select-option .option-copy > span').allTextContents()
+  assert.deepEqual(checkoutCountries,countryFixtures.filter(country=>country.status).map(country=>country.name))
+  await page.getByRole('option',{name:'United States',exact:true}).click()
+  assert.equal(await page.getByRole('combobox',{name:'Country',exact:true}).innerText(),'United States')
+  await page.locator('.location-trigger').click()
+  const dialog=page.getByRole('dialog',{name:'Where are you shopping from?',exact:true})
+  await dialog.getByRole('button',{name:'United States',exact:true}).waitFor()
+  assert.deepEqual(await dialog.locator('.country-list button > span').allTextContents(),checkoutCountries)
+  assert.equal(Math.round((await dialog.locator('.location-box').boundingBox()).width),600)
+  assert.ok(await dialog.locator('.country-list').evaluate(element=>element.scrollWidth<=element.clientWidth))
+  await page.screenshot({path:'test-artifacts/country-popup-desktop.png'})
+  await page.getByRole('searchbox',{name:'Search countries',exact:true}).fill('United')
+  assert.equal(await dialog.locator('.country-list button').count(),3)
+  await page.getByRole('searchbox',{name:'Search countries',exact:true}).fill('')
+  await page.setViewportSize({width:390,height:844})
+  assert.ok(await dialog.locator('.location-box').evaluate(element=>{const bounds=element.getBoundingClientRect();return bounds.left>=0&&bounds.right<=innerWidth&&element.scrollWidth<=element.clientWidth}))
+  assert.ok(await dialog.locator('.country-list').evaluate(element=>element.scrollWidth<=element.clientWidth))
+  await page.screenshot({path:'test-artifacts/country-popup-mobile.png'})
+  await dialog.getByRole('button',{name:'United States',exact:true}).click();await dialog.waitFor({state:'hidden'})
+  assert.deepEqual(errors,[]);await context.close()
+})
+
+test('first-time visitors choose country then configured zipcode, and saved choices are restored safely', {timeout:120_000}, async () => {
+  const previous=zipcodeFixtures;zipcodeFixtures=[{id:1,country_id:2,zipcodes:'00123, A1A 1A1'}]
+  const context=await newTestContext({viewport:{width:1440,height:1000},reducedMotion:'reduce'},false)
+  const page=await context.newPage();const errors=[];page.on('pageerror',error=>errors.push(error.message))
+  const stored=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('fgx-country')||'null'))
+  try {
+    await page.goto(`${base}/`,{waitUntil:'networkidle'})
+    const countryDialog=page.getByRole('dialog',{name:'Where are you shopping from?',exact:true})
+    await countryDialog.getByRole('button',{name:'Bangladesh',exact:true}).click()
+    const zipDialog=page.getByRole('dialog',{name:'Choose your zipcode',exact:true})
+    await zipDialog.getByRole('button',{name:'00123',exact:true}).waitFor()
+    assert.equal(await stored(),null,'A country with configured zipcodes is not saved until a zipcode is selected')
+    await zipDialog.getByRole('searchbox',{name:'Search zipcodes',exact:true}).fill('001')
+    assert.equal(await zipDialog.locator('.zipcode-list button').count(),1)
+    await zipDialog.getByRole('button',{name:'00123',exact:true}).click();await zipDialog.waitFor({state:'hidden'})
+    assert.deepEqual(await stored(),{id:2,name:'Bangladesh',zipcode:'00123'})
+    await page.reload({waitUntil:'networkidle'})
+    assert.equal(await page.locator('dialog[open]').count(),0)
+    assert.equal(await page.locator('.location-trigger strong').innerText(),'Bangladesh · 00123')
+    await page.locator('.location-trigger').click()
+    await countryDialog.getByRole('button',{name:'Australia',exact:true}).click();await countryDialog.waitFor({state:'hidden'})
+    assert.deepEqual(await stored(),{id:1,name:'Australia',zipcode:null})
+    await page.reload({waitUntil:'networkidle'});assert.equal(await page.locator('dialog[open]').count(),0)
+    zipcodeFixtures.push({id:2,country_id:1,zipcodes:'00999'})
+    await page.reload({waitUntil:'networkidle'})
+    await zipDialog.getByRole('button',{name:'00999',exact:true}).click();await zipDialog.waitFor({state:'hidden'})
+    zipcodeLookupFailure=true
+    await page.locator('.location-trigger').click();await countryDialog.getByRole('button',{name:'Bangladesh',exact:true}).click()
+    await zipDialog.getByRole('alert').waitFor()
+    assert.equal((await stored()).id,1,'A failed lookup must not silently bypass zipcode selection')
+    zipcodeLookupFailure=false
+    await zipDialog.getByRole('button',{name:'Try again',exact:true}).click()
+    await zipDialog.getByRole('button',{name:'A1A 1A1',exact:true}).waitFor()
+    await page.setViewportSize({width:390,height:844})
+    assert.ok(await zipDialog.locator('.location-box').evaluate(element=>{const bounds=element.getBoundingClientRect();return bounds.left>=0&&bounds.right<=innerWidth&&element.scrollWidth<=element.clientWidth}))
+    await page.screenshot({path:'test-artifacts/zipcode-selection-mobile.png'})
+    await zipDialog.getByRole('button',{name:'A1A 1A1',exact:true}).click();await zipDialog.waitFor({state:'hidden'})
+    assert.equal((await stored()).zipcode,'A1A 1A1')
+    let release
+    await page.route('**/countries/2/zipcodes',async route=>{await new Promise(resolve=>{release=resolve});await route.fulfill({json:{data:['00123']}})})
+    await page.getByRole('button',{name:'Choose location',exact:true}).click()
+    await countryDialog.getByRole('button',{name:'Bangladesh',exact:true}).click();await zipDialog.getByRole('status').waitFor()
+    await zipDialog.getByRole('button',{name:'Change country',exact:true}).click()
+    await countryDialog.getByRole('button',{name:'Australia',exact:true}).click();await zipDialog.getByRole('button',{name:'00999',exact:true}).click()
+    release();await page.waitForLoadState('networkidle')
+    assert.deepEqual(await stored(),{id:1,name:'Australia',zipcode:'00999'})
+    assert.equal(await page.locator('dialog[open]').count(),0)
+    assert.deepEqual(errors,[])
+  } finally {zipcodeFixtures=previous;zipcodeLookupFailure=false;await context.close()}
+})
+
+test('customer location keeps browser selection without addresses and prefers the default saved address', {timeout:120_000}, async () => {
+  for (const hasAddresses of [false,true]) {
+    const context=await newTestContext({viewport:{width:1440,height:1000},reducedMotion:'reduce'},false)
+    await context.addInitScript(() => {
+      localStorage.setItem('auth_token','fixture-customer-token')
+      localStorage.setItem('user',JSON.stringify({id:7,name:'Fixture Customer',email:'location@example.test'}))
+      if(!localStorage.getItem('fgx-country')) localStorage.setItem('fgx-country',JSON.stringify({id:1,name:'Australia',zipcode:null}))
+    })
+    const page=await context.newPage();const errors=[];page.on('pageerror',error=>errors.push(error.message))
+    let addressRequests=0
+    await page.route('**/api/v1/addresses',route=>{
+      assert.equal(route.request().headers().authorization,'Bearer fixture-customer-token')
+      addressRequests++
+      return route.fulfill({json:{data:hasAddresses?[
+        {id:1,is_default:false,country:{id:4,name:'Canada',status:true},zipcode:'A1A 1A1'},
+        {id:2,is_default:true,country:{id:9,name:'India',status:true},zipcode:'00123'},
+      ]:[]}})
+    })
+    try {
+      await page.goto(`${base}/`,{waitUntil:'networkidle'})
+      assert.ok(addressRequests>0,'Returning customer auth is hydrated before looking up addresses')
+      assert.equal(await page.locator('dialog[open]').count(),0)
+      assert.ok((await page.locator('.location-trigger strong').innerText()).startsWith(hasAddresses?'India':'Australia'))
+      assert.deepEqual(await page.evaluate(()=>JSON.parse(localStorage.getItem('fgx-country'))),{id:1,name:'Australia',zipcode:null})
+      if(!hasAddresses) {
+        await page.locator('.location-trigger').click()
+        await page.getByRole('dialog').getByRole('button',{name:'Canada',exact:true}).click()
+        await page.getByRole('dialog').waitFor({state:'hidden'})
+        assert.deepEqual(await page.evaluate(()=>JSON.parse(localStorage.getItem('fgx-country'))),{id:4,name:'Canada',zipcode:null})
+      }
+      await page.reload({waitUntil:'networkidle'})
+      assert.equal(await page.locator('dialog[open]').count(),0)
+      assert.ok((await page.locator('.location-trigger strong').innerText()).startsWith(hasAddresses?'India':'Canada'))
+      assert.deepEqual(errors,[])
+    } finally {await context.close()}
+  }
 })
