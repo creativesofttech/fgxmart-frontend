@@ -14,6 +14,7 @@ const legalDefaults = {
 }
 let legalFixtures = structuredClone(legalDefaults)
 let legalSaveFailure = false
+let brandFixtures = Array.from({length:9},(_,index)=>({id:index+1,name:'Fixture Brand '+String(index+1).padStart(2,'0'),status:true,image_url:'/images/logo/fgx-logo-dark.png'}))
 let faqFixtures = [], faqFailure = false
 let companyInfoFixture = {company:null,bank:null}
 let reviewFixtures = []
@@ -140,6 +141,7 @@ before(async () => {
       const saved = zipcodeFixtures.find(row => row.country_id === countryId)?.zipcodes || ''
       return send(200, {data:saved.split(',').map(code=>code.trim()).filter(Boolean)})
     }
+    if (url.pathname === '/api/v1/brands') return send(200,{data:brandFixtures.filter(brand=>brand.status!==false&&brand.status!==0)})
     if (url.pathname === '/api/v1/countries') return send(200, { data: url.searchParams.has('all') ? countryFixtures : countryFixtures.slice(0, 10), total: countryFixtures.length })
     if (url.pathname.startsWith('/api/v1/legal-pages/')) {
       const data=legalFixtures[url.pathname.split('/').at(-1)]
@@ -487,7 +489,8 @@ test('category and featured cards use WebP assets and connect to wishlist and en
   assert.equal(await bestSellers.locator('.collection-link').count(), 1)
   assert.equal(await bestSellers.locator('img').getAttribute('src'), '/assets/images/home/cat-3.webp')
   assert.equal(await page.locator('.brand-tile').count(), 9)
-  assert.equal(await page.locator('.home-brands img').count(), 0)
+  assert.equal(await page.locator('.home-brands img').count(), 9)
+  assert.equal(await page.locator('.home-brands img').first().getAttribute('alt'),'Fixture Brand 01')
   assert.equal(await page.getByRole('link', { name: 'Start shopping now', exact: true }).getAttribute('href'), '/products')
   assert.equal(await page.locator('footer').count(), 1)
   assert.equal(await page.locator('footer .footer-logo img').getAttribute('src'), '/images/logo/fgx-logo-light.png')
@@ -1620,4 +1623,68 @@ test('legal pages are editable through secured admin routes and published to foo
     assert.equal((await fetch(`${base}/api/admin/legal-pages/privacy-policy`,{method:'PUT',headers:{Cookie:'fgx_admin_session=legal-viewer-admin','X-FGX-Admin':'1','Content-Type':'application/json'},body:JSON.stringify({title:'Forbidden',content:'<p>Forbidden.</p>'})})).status,403)
     assert.deepEqual(errors,[])
   } finally {legalFixtures=original;legalSaveFailure=false;await context.close()}
+})
+
+test('homepage brands load dynamically and loop seamlessly only above nine brands', {timeout:120_000}, async () => {
+  const original=brandFixtures
+  brandFixtures=Array.from({length:12},(_,index)=>({id:index+1,name:'Live Brand '+String(index+1).padStart(2,'0'),status:true,image_url:'/images/logo/fgx-logo-dark.png'}))
+  brandFixtures.push({id:99,name:'Hidden Brand',status:false})
+  brandFixtures.push({id:100,name:'No Logo',status:true,image_url:null})
+  brandFixtures.push({id:101,name:'Broken Logo',status:true,image_url:'/images/missing-brand-logo.svg'})
+  const context=await newTestContext({viewport:{width:1440,height:1000},reducedMotion:'no-preference'})
+  const page=await context.newPage();const errors=[];page.on('pageerror',error=>errors.push(error.message))
+  try {
+    await page.goto(`${base}/`,{waitUntil:'networkidle'})
+    const section=page.getByRole('region',{name:'Shop By Brands',exact:true})
+    await section.scrollIntoViewIfNeeded()
+    await section.locator('.brands-viewport.logos-ready').waitFor()
+    assert.equal(await section.locator('.brand-group:not(.brand-clone) .brand-tile').count(),12)
+    assert.equal(await section.locator('.brand-tile span').count(),0)
+    assert.ok(await section.locator('.brand-group:not(.brand-clone) img').evaluateAll(images=>images.every(image=>image.complete&&image.naturalWidth>0&&getComputedStyle(image).objectFit==='contain')))
+    assert.equal(await section.getByText('Hidden Brand',{exact:true}).count(),0)
+    assert.equal(await section.locator('.brand-clone').getAttribute('aria-hidden'),'true')
+    assert.ok(requests.some(request=>request.url==='/api/v1/brands?all=1'))
+    const checkSeam=async columns=>{
+      for(const fraction of [0,.17,.49,.73,.999,1]) {
+        const geometry=await section.locator('.brands-track').evaluate(async (element,fraction)=>{
+          const animation=element.getAnimations()[0]
+          animation.currentTime=Number(animation.effect.getTiming().duration)*fraction
+          await new Promise(resolve=>requestAnimationFrame(resolve))
+          const viewport=element.parentElement.getBoundingClientRect()
+          const gap=parseFloat(getComputedStyle(element.parentElement).getPropertyValue('--brand-gap'))
+          const tiles=[...element.querySelectorAll('.brand-tile')].map(tile=>tile.getBoundingClientRect()).filter(rect=>rect.right>viewport.left&&rect.left<viewport.right).sort((a,b)=>a.left-b.left)
+          const width=element.querySelector('.brand-tile').getBoundingClientRect().width
+          return {first:tiles[0].left-viewport.left,last:viewport.right-tiles.at(-1).right,gaps:tiles.slice(1).map((rect,index)=>rect.left-tiles[index].right),gap,width,viewport:viewport.width}
+        },fraction)
+        assert.ok(geometry.first<=geometry.gap+1&&geometry.last<=geometry.gap+1,'No blank stretch at any loop position')
+        assert.ok(geometry.gaps.every(gap=>gap<=geometry.gap+1),'Spacing stays consistent across the seam')
+        assert.ok(Math.abs(geometry.width*columns+geometry.gap*(columns-1)-geometry.viewport)<2)
+      }
+    }
+    await checkSeam(9)
+    await section.getByRole('button',{name:'Pause brand scrolling',exact:true}).click()
+    assert.equal(await section.locator('.brands-track').evaluate(element=>getComputedStyle(element).animationPlayState),'paused')
+    await page.screenshot({path:'test-artifacts/dynamic-brands-desktop.png'})
+    await section.getByRole('button',{name:'Resume brand scrolling',exact:true}).click()
+    assert.equal(await section.locator('.brands-track').evaluate(element=>getComputedStyle(element).animationPlayState),'running')
+    await section.locator('.brands-viewport').hover()
+    assert.equal(await section.locator('.brands-track').evaluate(element=>getComputedStyle(element).animationPlayState),'paused')
+    await page.mouse.move(0,0)
+    await page.setViewportSize({width:390,height:844});await section.scrollIntoViewIfNeeded()
+    await checkSeam(3)
+    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth))
+    await page.screenshot({path:'test-artifacts/dynamic-brands-mobile.png'})
+    await page.emulateMedia({reducedMotion:'reduce'})
+    assert.equal(await section.locator('.brands-track').evaluate(element=>getComputedStyle(element).animationName),'none')
+    assert.equal(await section.locator('.brand-tile:visible').count(),12)
+    assert.equal(await section.locator('.brand-clone:visible').count(),0)
+    brandFixtures=brandFixtures.slice(0,9);await page.reload({waitUntil:'networkidle'})
+    assert.equal(await section.locator('.brands-track').count(),0)
+    assert.equal(await section.locator('.brand-tile').count(),9)
+    brandFixtures=brandFixtures.slice(0,3);await page.reload({waitUntil:'networkidle'})
+    assert.equal(await section.locator('.brand-tile').count(),3)
+    brandFixtures=[];await page.reload({waitUntil:'networkidle'})
+    await section.getByText('Brand logos are coming soon.',{exact:true}).waitFor()
+    assert.deepEqual(errors,[])
+  } finally {brandFixtures=original;await context.close()}
 })

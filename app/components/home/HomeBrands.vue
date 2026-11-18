@@ -1,39 +1,80 @@
 <template>
-  <section class="home-brands" aria-labelledby="brands-title">
-    <h2 id="brands-title">Shop By Brands</h2>
-    <ul class="brand-grid" aria-label="Brand preview">
-      <motion.li v-for="brand in brands" :key="brand.name" class="tw:card brand-tile" :style="{ '--brand-color': brand.color }" :while-hover="{ y: -3 }">
-        <span>{{ brand.name }}</span>
-      </motion.li>
-    </ul>
+  <section ref="brandsRoot" class="home-brands" aria-labelledby="brands-title">
+    <div class="brands-heading"><h2 id="brands-title">Shop By Brands</h2><button v-if="hasLoop && !pending && !error" class="tw:btn tw:btn-ghost brand-pause" type="button" :aria-label="paused ? 'Resume brand scrolling' : 'Pause brand scrolling'" @click="paused = !paused"><Play v-if="paused" :size="14" aria-hidden="true" /><Pause v-else :size="14" aria-hidden="true" /><span>{{ paused ? 'Resume' : 'Pause' }}</span></button></div>
+    <div v-if="pending" class="brand-grid" role="status" aria-label="Loading brands"><div v-for="index in 9" :key="index" class="brand-skeleton" aria-hidden="true" /></div>
+    <div v-else-if="error" class="brand-status" role="alert"><p>We couldn’t load the brands.</p><button class="tw:btn tw:btn-outline tw:btn-sm" type="button" @click="refresh">Try again</button></div>
+    <p v-else-if="!brands.length" class="brand-status">Brand logos are coming soon.</p>
+    <div v-else-if="hasLoop" class="brands-viewport" :class="{ 'is-paused': paused, 'logos-ready': logosReady }">
+      <div class="brands-track" :style="{ animationDuration: brands.length * 3.2 + 's' }">
+        <ul v-for="copy in 2" :key="copy" class="brand-group" :class="{ 'brand-clone': copy === 2 }" :aria-label="copy === 1 ? 'Available brands' : undefined" :aria-hidden="copy === 2 ? true : undefined" :inert="copy === 2">
+          <li v-for="brand in brands" :key="brand.id" class="brand-tile" :class="{ 'is-loading': !loadedLogos.has(String(brand.id)) }"><img :src="brand.logo" :data-brand-id="brand.id" :alt="brand.name" width="160" height="56" loading="eager" decoding="async" @load="loadedLogos.add(String(brand.id))" @error="failedLogos.add(String(brand.id))" /></li>
+        </ul>
+      </div>
+    </div>
+    <ul v-else class="brand-grid" aria-label="Available brands"><motion.li v-for="brand in brands" :key="brand.id" class="brand-tile" :class="{ 'is-loading': !loadedLogos.has(String(brand.id)) }" :while-hover="{ y: -3 }"><img :src="brand.logo" :data-brand-id="brand.id" :alt="brand.name" width="160" height="56" loading="lazy" decoding="async" @load="loadedLogos.add(String(brand.id))" @error="failedLogos.add(String(brand.id))" /></motion.li></ul>
   </section>
 </template>
 
 <script setup>
 import { motion } from 'motion-v'
-
-// Text-only design previews from the homepage mockup; no brand imagery needed.
-const brands = [
-  { name: 'Kellogg’s', color: '#ca1834' },
-  { name: 'Maggi', color: '#d72a28' },
-  { name: 'Samsung', color: '#214795' },
-  { name: 'boAt', color: '#23212b' },
-  { name: 'Prestige', color: '#c8282d' },
-  { name: 'Pigeon', color: '#ca303b' },
-  { name: 'Apple', color: '#292831' },
-  { name: 'HP', color: '#087ab7' },
-  { name: 'Xiaomi', color: '#e76a1c' },
-]
+import { Pause, Play } from 'lucide-vue-next'
+const config = useRuntimeConfig()
+const paused = ref(false)
+const brandsRoot = ref(null)
+const failedLogos = reactive(new Set())
+const loadedLogos = reactive(new Set())
+const logoURL = brand => {
+  const value = brand.image_url || brand.brand_image
+  if (typeof value !== 'string' || !value.trim()) return null
+  const path = value.trim()
+  if (/^https?:\/\//i.test(path)) return path
+  if (/^(?:[a-z][a-z\d+.-]*:|\/\/)/i.test(path)) return null
+  if (path.startsWith('/assets/') || path.startsWith('/images/')) return path
+  const base = config.public.apiBase.replace(/\/api\/v1\/?$/, '')
+  return base + '/storage/' + path.replace(/^\/?storage\//, '').replace(/^\/+/, '')
+}
+const { data: response, pending, error, refresh } = await useFetch(config.public.apiBase + '/brands', { query: { all: 1 }, key: 'storefront-home-brands', default: () => ({ data: [] }) })
+const brands = computed(() => {
+  const seen = new Set()
+  return (response.value?.data || []).map(brand => ({ ...brand, logo: logoURL(brand) })).filter(brand => {
+    if (!brand.logo || failedLogos.has(String(brand.id)) || !brand.id || !brand.name?.trim() || brand.status === false || brand.status === 0 || seen.has(brand.id)) return false
+    seen.add(brand.id)
+    return true
+  })
+})
+const hasLoop = computed(() => brands.value.length > 9)
+const logosReady = computed(() => brands.value.every(brand => loadedLogos.has(String(brand.id))))
+const checkCachedLogos = () => {
+  for (const image of brandsRoot.value?.querySelectorAll('img[data-brand-id]') || []) {
+    if (image.complete) (image.naturalWidth > 0 ? loadedLogos : failedLogos).add(image.dataset.brandId)
+  }
+}
+onMounted(checkCachedLogos)
+watch(response, async () => { failedLogos.clear(); loadedLogos.clear(); await nextTick(); checkCachedLogos() })
 </script>
 
 <style scoped>
-.home-brands { padding-top: 33px; }
-h2 { position: relative; color: #2f1d4b; font-size: 25px; font-weight: 740; line-height: 1.25; letter-spacing: -.7px; margin: 0 0 18px; padding-bottom: 13px; }
+.home-brands { --brand-columns: 9; --brand-gap: 14px; padding-top: 33px; }
+.brands-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+h2 { position: relative; color: #2f1d4b; font-size: 25px; font-weight: 740; line-height: 1.25; letter-spacing: -.7px; margin: 0; padding-bottom: 13px; }
 h2::after { content: ''; position: absolute; left: 0; bottom: 0; width: 43px; height: 3px; border-radius: 4px; background: #7850b1; }
-.brand-grid { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 14px; list-style: none; padding: 0; margin: 0; }
-.brand-tile { min-width: 0; display: flex; align-items: center; justify-content: center; min-height: 73px; padding: 14px 8px; border: 1px solid #ece8f1; border-radius: 12px; background: #fff; box-shadow: 0 3px 9px rgb(40 22 68 / 3%); }
-.brand-tile span { color: var(--brand-color); font-size: clamp(13px, 1.4vw, 20px); font-weight: 750; letter-spacing: -.5px; }
-@media (max-width: 1100px) { .brand-grid { gap: 10px; } }
-@media (max-width: 960px) { .brand-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } .brand-tile span { font-size: 18px; } }
-@media (max-width: 600px) { .home-brands { padding-top: 28px; } h2 { font-size: 21px; margin-bottom: 16px; } .brand-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } .brand-tile { min-height: 65px; } .brand-tile span { font-size: 16px; } }
+.brand-pause { display: flex; align-items: center; gap: 6px; min-height: 31px; height: 31px; padding: 5px 9px; background: #f7f3fc; color: #9272aa; border: 1px solid #eae1f2; border-radius: 7px; font-size: 10px; font-weight: 500; }
+.brand-pause:hover { background: #eee5f7; }.brand-pause:focus-visible { outline: 2px solid #9c7db3; outline-offset: 3px; }
+.brand-grid { display: grid; grid-template-columns: repeat(var(--brand-columns), minmax(0, 1fr)); gap: var(--brand-gap); list-style: none; padding: 6px 0; margin: 0; }
+.brand-tile { position: relative; min-width: 0; display: flex; align-items: center; justify-content: center; min-height: 73px; padding: 14px 8px; border: 0; border-radius: 0; background: transparent; box-shadow: none; text-align: center; }
+.brand-tile img { display: block; width: 100%; max-width: 160px; height: 56px; object-fit: contain; opacity: 1; transition: opacity .25s ease; }
+.brand-tile.is-loading img { opacity: 0; }
+.brand-tile.is-loading::after, .brand-skeleton::after { content: ''; position: absolute; width: 22px; height: 22px; border: 2px solid #ece5f5; border-top-color: #7850b1; border-radius: 50%; animation: brand-loading .8s linear infinite; }
+.brands-viewport { overflow: hidden; container-type: inline-size; padding: 6px 0; }
+.brands-track { display: flex; width: max-content; animation: brand-scroll linear infinite; will-change: transform; }
+.brand-group { display: flex; gap: var(--brand-gap); flex-shrink: 0; width: max-content; list-style: none; margin: 0; padding: 0 var(--brand-gap) 0 0; }
+.brand-group .brand-tile { width: calc((100cqw + var(--brand-gap)) / var(--brand-columns) - var(--brand-gap)); flex-shrink: 0; }
+.brands-viewport:not(.logos-ready) .brands-track, .brands-viewport:hover .brands-track, .brands-viewport.is-paused .brands-track { animation-play-state: paused; }
+.brand-skeleton { position: relative; display: flex; align-items: center; justify-content: center; height: 73px; background: transparent; }.brand-status { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 14px; padding: 25px; border: 1px dashed #e4d9ee; border-radius: 12px; color: #9983a7; font-size: 12px; }.brand-status button { padding: 7px 12px; border: 1px solid #ddcde9; border-radius: 7px; font-size: 11px; color: #76528f; }
+@keyframes brand-loading { to { transform: rotate(360deg); } }
+@keyframes brand-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+@media(max-width:1100px) { .home-brands { --brand-gap: 10px; } }
+@media(max-width:960px) { .home-brands { --brand-columns: 5; } }
+@media(max-width:600px) { .home-brands { --brand-columns: 3; padding-top: 28px; }h2 { font-size: 21px; }.brand-tile, .brand-skeleton { min-height: 65px; }.brand-tile img { height: 46px; }.brand-pause { font-size: 9px; padding-inline: 7px; } }
+@media(prefers-reduced-motion:reduce) { .brand-tile img { transition: none; }.brand-tile.is-loading::after, .brand-skeleton::after { animation: none; } .brand-pause, .brand-clone { display: none; }.brands-track { animation: none; transform: none; width: 100%; will-change: auto; }.brand-group:not(.brand-clone) { display: grid; grid-template-columns: repeat(var(--brand-columns), minmax(0, 1fr)); gap: var(--brand-gap); width: 100%; padding: 0; }.brand-group .brand-tile { width: auto; } }
 </style>
