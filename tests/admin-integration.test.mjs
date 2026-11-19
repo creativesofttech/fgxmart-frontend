@@ -15,6 +15,7 @@ const legalDefaults = {
 let legalFixtures = structuredClone(legalDefaults)
 let legalSaveFailure = false
 let brandFixtures = Array.from({length:9},(_,index)=>({id:index+1,name:'Fixture Brand '+String(index+1).padStart(2,'0'),status:true,image_url:'/images/logo/fgx-logo-dark.png'}))
+let adminBrandOrderFixtures = null, brandOrderFailure = false
 let faqFixtures = [], faqFailure = false
 let companyInfoFixture = {company:null,bank:null}
 let reviewFixtures = []
@@ -99,6 +100,14 @@ before(async () => {
       const token = req.headers.authorization?.replace('Bearer ', '')
       if (!tokens.has(token)) return send(401, { message: 'Unauthenticated.' })
       if (url.pathname.endsWith('/user')) return send(200, { data: { id: 1, name: 'Fixture Admin', email: 'admin@example.test', roles: token === 'integration-admin' ? ['super-admin'] : ['viewer'], permissions: token === 'restricted-admin' ? ['products.index'] : token === 'legal-viewer-admin' ? ['legal-pages.index'] : [] } })
+      if (url.pathname === '/api/v1/admin/brands/reorder' && req.method === 'PUT') {
+        if (brandOrderFailure) return send(500,{message:'Unable to save the order. Please try again.'})
+        const {brand_ids}=JSON.parse(raw)
+        adminBrandOrderFixtures=brand_ids.map(id=>adminBrandOrderFixtures.find(brand=>brand.id===id))
+        brandFixtures=structuredClone(adminBrandOrderFixtures)
+        return send(200,{message:'Order saved'})
+      }
+      if (url.pathname === '/api/v1/admin/brands' && req.method === 'GET' && adminBrandOrderFixtures) return send(200,{data:adminBrandOrderFixtures,total:adminBrandOrderFixtures.length,current_page:1,last_page:1})
       if (url.pathname.startsWith('/api/v1/admin/legal-pages/')) {
         if(token === 'restricted-admin' || (token === 'legal-viewer-admin' && req.method !== 'GET'))return send(403,{message:'Forbidden'})
         const slug=url.pathname.split('/').at(-1)
@@ -1712,4 +1721,53 @@ test('checkout generates a downloadable proforma PDF with the patched jsPDF depe
     assert.match(pdf.toString('latin1'),/%%EOF/)
     assert.deepEqual(errors,[])
   } finally {await context.close()}
+})
+test('admin brand rearranging loads every logo, saves ordering and supports drag, keyboard and mobile controls', {timeout:120_000}, async () => {
+  const original=brandFixtures
+  adminBrandOrderFixtures=Array.from({length:12},(_,index)=>({id:index+1,name:'Ordered Brand '+(index+1),slug:'ordered-'+index,status:true,image_url:'/images/logo/fgx-logo-dark.png'}))
+  const context=await newTestContext({viewport:{width:1440,height:1050},reducedMotion:'reduce'})
+  const page=await context.newPage();const errors=[];page.on('pageerror',error=>errors.push(error.message))
+  try {
+    await page.goto(`${base}/admin-access?redirect=/admin/brands`,{waitUntil:'networkidle'})
+    await page.getByLabel('Email address',{exact:true}).fill('admin@example.test')
+    await page.getByLabel('Password',{exact:true}).fill('fixture-password')
+    await page.getByRole('button',{name:'Login to dashboard',exact:true}).click()
+    await page.waitForURL('**/admin/brands')
+    await page.getByRole('button',{name:'Rearrange',exact:true}).click()
+    const panel=page.getByRole('tabpanel',{name:'Rearrange',exact:true})
+    await panel.locator('.brand-order-item').first().waitFor()
+    assert.equal(await panel.locator('.brand-order-item').count(),12)
+    assert.equal(await panel.locator('img').count(),12)
+    await panel.getByRole('button',{name:'Move Ordered Brand 1 later',exact:true}).click()
+    assert.deepEqual(await panel.locator('h3').allTextContents(),['Ordered Brand 2','Ordered Brand 1',...Array.from({length:10},(_,index)=>'Ordered Brand '+(index+3))])
+    await panel.getByRole('button',{name:'Cancel',exact:true}).click()
+    assert.equal(await page.getByRole('tab',{name:'Brand list',exact:true}).getAttribute('aria-selected'),'true')
+    await page.getByRole('tab',{name:'Brand list',exact:true}).focus();await page.keyboard.press('ArrowRight')
+    await panel.locator('.brand-order-item').first().waitFor()
+    assert.equal(await panel.locator('h3').first().innerText(),'Ordered Brand 1')
+    await panel.locator('[data-brand-id="1"]').dragTo(panel.locator('[data-brand-id="3"]'))
+    assert.equal(await panel.locator('h3').nth(2).innerText(),'Ordered Brand 1')
+    brandOrderFailure=true
+    await panel.getByRole('button',{name:'Save order',exact:true}).click()
+    await panel.locator('.brand-order-message[role=alert]').waitFor()
+    assert.equal(await panel.locator('h3').nth(2).innerText(),'Ordered Brand 1')
+    brandOrderFailure=false
+    await panel.getByRole('button',{name:'Save order',exact:true}).click()
+    await panel.getByRole('status').filter({hasText:'Brand order saved'}).waitFor()
+    assert.deepEqual(adminBrandOrderFixtures.slice(0,3).map(brand=>brand.id),[2,3,1])
+    assert.ok(requests.some(request=>request.url==='/api/v1/admin/brands?all=1'))
+    await page.screenshot({path:'test-artifacts/admin-brand-order-desktop.png',fullPage:true})
+    await page.reload({waitUntil:'networkidle'})
+    assert.equal(await page.locator('tbody tr td').filter({hasText:'Ordered Brand 2'}).count(),1)
+    await page.setViewportSize({width:390,height:844})
+    await page.getByRole('button',{name:'Rearrange',exact:true}).click()
+    await panel.locator('.brand-order-item').first().waitFor()
+    await panel.getByRole('button',{name:'Move Ordered Brand 2 later',exact:true}).click()
+    assert.equal(await panel.locator('h3').first().innerText(),'Ordered Brand 3')
+    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth))
+    await page.screenshot({path:'test-artifacts/admin-brand-order-mobile.png',fullPage:true})
+    await page.goto(`${base}/`,{waitUntil:'networkidle'})
+    assert.equal(await page.locator('.home-brands .brand-group:not(.brand-clone) img').first().getAttribute('alt'),'Ordered Brand 2')
+    assert.deepEqual(errors,[])
+  } finally {brandFixtures=original;adminBrandOrderFixtures=null;brandOrderFailure=false;await context.close()}
 })

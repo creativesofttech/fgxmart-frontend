@@ -1,12 +1,19 @@
 <template>
   <div class="page-container">
     <div class="page-header">
-      <h1 class="title">Brands Management</h1>
-      <button class="btn-primary tw:btn tw:btn-sm tw:btn-primary" @click="openCreateModal">
+      <h1 id="brand-management-title" class="title">Brands Management</h1>
+      <div class="brand-header-actions">
+      <button v-if="canRearrange" class="tw:btn tw:btn-sm tw:btn-outline" :disabled="orderSaving" @click="openRearrange"><ArrowUpDown :size="16" aria-hidden="true" /> Rearrange</button>
+      <button class="btn-primary tw:btn tw:btn-sm tw:btn-primary" :disabled="orderSaving" @click="openCreateModal">
         + Create Brand
       </button>
+      </div>
     </div>
-    <div class="tw:card content-card">
+    <div v-if="canRearrange" class="tw:tabs brand-tabs" role="tablist" aria-label="Brand views" @keydown.right.prevent="changeTab" @keydown.left.prevent="changeTab">
+      <button id="brand-list-tab" role="tab" class="tw:tab" :class="{'tw:tab-active': activeTab === 'list'}" :aria-selected="activeTab === 'list'" :tabindex="activeTab === 'list' ? 0 : -1" aria-controls="brand-list-panel" :disabled="orderSaving" @click="activeTab = 'list'">Brand list</button>
+      <button id="brand-order-tab" role="tab" class="tw:tab" :class="{'tw:tab-active': activeTab === 'order'}" :aria-selected="activeTab === 'order'" :tabindex="activeTab === 'order' ? 0 : -1" aria-controls="brand-order-panel" :disabled="orderSaving" @click="openRearrange">Rearrange</button>
+    </div>
+    <div v-show="activeTab === 'list'" id="brand-list-panel" role="tabpanel" :aria-labelledby="canRearrange ? 'brand-list-tab' : 'brand-management-title'" class="tw:card content-card">
       <DataTable
         :columns="columns"
         :data="brands"
@@ -41,6 +48,22 @@
         </template>
       </DataTable>
     </div>
+    <section v-if="canRearrange && activeTab === 'order'" id="brand-order-panel" role="tabpanel" aria-labelledby="brand-order-tab" class="tw:card brand-order-panel" :aria-busy="orderLoading || orderSaving">
+      <div class="brand-order-heading"><div><h2>Arrange your brands</h2><p>Drag logos into order, or use the arrow buttons. Save to update the storefront.</p></div><span>{{ orderedBrands.length }} brands</span></div>
+      <div v-if="orderLoading" class="brand-order-empty" role="status"><span class="tw:loading tw:loading-spinner" aria-hidden="true" /> Loading brands...</div>
+      <div v-else-if="orderLoadError" class="brand-order-empty" role="alert"><p>{{ orderLoadError }}</p><button class="tw:btn tw:btn-sm tw:btn-outline" @click="openRearrange">Try again</button></div>
+      <p v-else-if="!orderedBrands.length" class="brand-order-empty">Create a brand to start arranging your list.</p>
+      <ol v-else class="brand-order-grid" aria-label="Brand display order">
+        <li v-for="(brand, index) in orderedBrands" :key="brand.id" class="brand-order-item" :class="{'is-dragging': draggingId === brand.id}" :draggable="!orderSaving" :data-brand-id="brand.id" @dragstart="startDrag($event, brand.id)" @dragover.prevent @drop.prevent="dropBrand(brand.id)" @dragend="draggingId = null">
+          <GripVertical class="brand-grip" :size="16" aria-hidden="true" />
+          <div class="brand-order-logo"><img v-if="brand.image_url && !brokenOrderImages.has(brand.id)" :src="brand.image_url" alt="" draggable="false" @error="brokenOrderImages.add(brand.id)" /><Tag v-else :size="30" aria-hidden="true" /></div>
+          <h3>{{ brand.name }}</h3>
+          <div class="brand-order-controls"><button type="button" class="tw:btn tw:btn-ghost tw:btn-xs tw:btn-square" :aria-label="`Move ${brand.name} earlier`" :disabled="orderSaving || index === 0" @click="moveBrand(index, index - 1)"><ArrowLeft :size="16" aria-hidden="true" /></button><button type="button" class="tw:btn tw:btn-ghost tw:btn-xs tw:btn-square" :aria-label="`Move ${brand.name} later`" :disabled="orderSaving || index === orderedBrands.length - 1" @click="moveBrand(index, index + 1)"><ArrowRight :size="16" aria-hidden="true" /></button></div>
+        </li>
+      </ol>
+      <p v-if="orderMessage" class="brand-order-message" :class="{'is-error': orderFailed}" :role="orderFailed ? 'alert' : 'status'">{{ orderMessage }}</p>
+      <div class="brand-order-footer"><span>{{ orderDirty ? 'You have unsaved changes.' : 'Your saved order appears on the storefront.' }}</span><div><button class="tw:btn tw:btn-sm tw:btn-outline" :disabled="orderSaving || orderLoading" @click="cancelRearrange">Cancel</button><button class="tw:btn tw:btn-sm tw:btn-primary" :disabled="orderSaving || orderLoading || !!orderLoadError || !orderDirty" @click="saveOrder"><span v-if="orderSaving" class="tw:loading tw:loading-spinner tw:loading-xs" aria-hidden="true" /><Save v-else :size="16" aria-hidden="true" />{{ orderSaving ? 'Saving...' : 'Save order' }}</button></div></div>
+    </section>
     <!-- Edit/Create Modal -->
     <Modal
       v-model="showModal"
@@ -122,14 +145,70 @@
 </template>
 <script setup>
 definePageMeta({ layout: "admin" })
-import { ref, onMounted, reactive } from 'vue'
+import { ref, onMounted, reactive, computed, nextTick } from 'vue'
 import DataTable from '~/components/admin/ui/DataTable.vue'
 import Modal from '~/components/admin/ui/Modal.vue'
 import ConfirmModal from '~/components/admin/ui/ConfirmModal.vue'
-import { Edit2, Trash2, Upload, X } from 'lucide-vue-next'
+import { Edit2, Trash2, Upload, X, ArrowUpDown, ArrowLeft, ArrowRight, GripVertical, Tag, Save } from 'lucide-vue-next'
 import { formatDate } from '~/utils/admin-format'
 import { useAdminToast } from '~/composables/useAdminToast'
 const { success, error: toastError } = useAdminToast()
+const { can } = useAdminAuth()
+const canRearrange = computed(() => can('brands.index') && can('brands.edit'))
+const activeTab = ref('list'), orderedBrands = ref([]), savedOrder = ref([])
+const orderLoading = ref(false), orderSaving = ref(false), orderLoadError = ref('')
+const orderMessage = ref(''), orderFailed = ref(false), draggingId = ref(null)
+const brokenOrderImages = reactive(new Set())
+const orderDirty = computed(() => orderedBrands.value.map(brand => brand.id).join(',') !== savedOrder.value.join(','))
+const openRearrange = async () => {
+  if (!canRearrange.value || orderSaving.value || orderLoading.value) return
+  if (activeTab.value === 'order' && !orderLoadError.value) return
+  activeTab.value = 'order'; orderLoading.value = true; orderLoadError.value = ''; orderMessage.value = ''; orderedBrands.value = []; savedOrder.value = []
+  try {
+    const response = await $adminApi('/brands?all=1')
+    orderedBrands.value = response.data
+    savedOrder.value = response.data.map(brand => brand.id)
+    brokenOrderImages.clear()
+  } catch (err) { orderLoadError.value = 'Unable to load the brand order. Please try again.' }
+  finally { orderLoading.value = false }
+}
+const changeTab = async () => {
+  if (orderSaving.value) return
+  if (activeTab.value === 'list') await openRearrange()
+  else activeTab.value = 'list'
+  await nextTick()
+  document.getElementById(activeTab.value === 'list' ? 'brand-list-tab' : 'brand-order-tab')?.focus()
+}
+const moveBrand = (from, to) => {
+  if (orderSaving.value || from < 0 || to < 0 || to >= orderedBrands.value.length || from === to) return
+  const [brand] = orderedBrands.value.splice(from, 1)
+  orderedBrands.value.splice(to, 0, brand)
+  orderFailed.value = false; orderMessage.value = `${brand.name} moved to position ${to + 1}. Save to apply this order.`
+}
+const startDrag = (event, id) => {
+  if (orderSaving.value || event.target.closest('button')) { event.preventDefault(); return }
+  draggingId.value = id; event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', String(id))
+}
+const dropBrand = id => {
+  if (draggingId.value === null) return
+  moveBrand(orderedBrands.value.findIndex(brand => brand.id === draggingId.value), orderedBrands.value.findIndex(brand => brand.id === id))
+  draggingId.value = null
+}
+const cancelRearrange = () => { activeTab.value = 'list'; orderedBrands.value = []; savedOrder.value = []; orderMessage.value = '' }
+const saveOrder = async () => {
+  if (!canRearrange.value || orderSaving.value || !orderDirty.value || orderLoading.value || orderLoadError.value) return
+  orderSaving.value = true; orderFailed.value = false; orderMessage.value = ''
+  try {
+    await $adminApi('/brands/reorder', { method: 'PUT', body: { brand_ids: orderedBrands.value.map(brand => brand.id) } })
+    savedOrder.value = orderedBrands.value.map(brand => brand.id)
+    clearNuxtData('storefront-home-brands')
+    orderMessage.value = 'Brand order saved. Your storefront now uses this order.'
+    await fetchBrands(1)
+  } catch (err) {
+    orderFailed.value = true; orderMessage.value = err.data?.message || 'Unable to save the order. Please try again.'
+    if (err.statusCode === 409 || err.response?.status === 409) orderLoadError.value = orderMessage.value
+  } finally { orderSaving.value = false }
+}
 const brands = ref([])
 const loading = ref(true)
 const pagination = ref(null)
@@ -273,6 +352,31 @@ onMounted(() => {
 })
 </script>
 <style scoped>
+.brand-header-actions { display: flex; align-items: center; gap: 12px; }
+.brand-tabs { display: flex; align-self: flex-start; padding: 5px; gap: 6px; background: #ebe5f4; border-radius: 11px; }
+.brand-tabs .tw\:tab { height: 40px; padding: 0 20px; border-radius: 7px; font-size: 13px; color: #78648a; }
+.brand-tabs .tw\:tab-active { background: white; color: #472580; font-weight: 600; box-shadow: 0 2px 5px rgb(56 30 86 / 6%); }
+.brand-order-panel { padding: 26px; border: 1px solid #e8e0f0; border-radius: 12px; background: white; }
+.brand-order-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; margin-bottom: 24px; }
+.brand-order-heading h2 { font-size: 18px; font-weight: 650; color: #302044; margin: 0 0 6px; }
+.brand-order-heading p, .brand-order-heading > span, .brand-order-footer > span { font-size: 12px; color: #8a789a; margin: 0; line-height: 1.7; }
+.brand-order-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 16px; list-style: none; padding: 0; margin: 0; }
+.brand-order-item { position: relative; display: flex; flex-direction: column; align-items: center; padding: 24px 14px 10px; border: 1px solid #e8e1f0; border-radius: 11px; background: #fff; cursor: grab; min-width: 0; }
+.brand-order-item:hover { border-color: #b7a3d4; background: #fcfaff; }
+.brand-order-item.is-dragging { opacity: .45; border-style: dashed; }
+.brand-grip { position: absolute; top: 9px; left: 9px; color: #b1a3c0; }
+.brand-order-logo { display: flex; align-items: center; justify-content: center; width: 100%; height: 70px; color: #b1a3c0; }
+.brand-order-logo img { width: 100%; max-width: 130px; height: 60px; object-fit: contain; }
+.brand-order-item h3 { font-size: 13px; font-weight: 600; color: #483256; text-align: center; overflow-wrap: anywhere; margin: 12px 0 8px; }
+.brand-order-controls { display: flex; justify-content: center; gap: 10px; margin-top: auto; }
+.brand-order-controls button { color: #765694; }
+.brand-order-controls button:focus-visible, .brand-tabs button:focus-visible { outline: 2px solid #8e6cb7; outline-offset: 2px; }
+.brand-order-empty { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 12px; padding: 48px 15px; color: #8a789a; font-size: 13px; }
+.brand-order-message { background: #f0f7eb; color: #587740; border-radius: 8px; padding: 12px 14px; font-size: 12px; margin: 20px 0 0; }
+.brand-order-message.is-error { background: #fff0f3; color: #a35d75; }
+.brand-order-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; border-top: 1px solid #eee7f5; margin-top: 25px; padding-top: 22px; }
+.brand-order-footer > div { display: flex; gap: 10px; }
+@media(max-width:600px) { .page-header { flex-wrap: wrap; gap: 16px; }.brand-order-panel { padding: 18px; }.brand-order-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }.brand-header-actions { gap: 8px; }.brand-order-footer > div { width: 100%; }.brand-order-footer button { flex: 1; } }
 .page-container {
   display: flex;
   flex-direction: column;
