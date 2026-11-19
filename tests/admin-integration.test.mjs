@@ -3,7 +3,7 @@ import { after, before, test } from 'node:test'
 import { createServer } from 'node:http'
 import { spawn } from 'node:child_process'
 import { once } from 'node:events'
-import { mkdir } from 'node:fs/promises'
+import { mkdir, readFile } from 'node:fs/promises'
 import { chromium } from '@playwright/test'
 
 // Exercise the built Nuxt server against an isolated API fixture. Laravel has its
@@ -1687,4 +1687,29 @@ test('homepage brands load dynamically and loop seamlessly only above nine brand
     await section.getByText('Brand logos are coming soon.',{exact:true}).waitFor()
     assert.deepEqual(errors,[])
   } finally {brandFixtures=original;await context.close()}
+})
+
+test('checkout generates a downloadable proforma PDF with the patched jsPDF dependency', {timeout:120_000}, async () => {
+  const context=await newTestContext({acceptDownloads:true})
+  await context.addInitScript(product=>{localStorage.setItem('guest_cart',JSON.stringify([{product_id:product.id,product,quantity:2,options:null}]))},product)
+  const page=await context.newPage();const errors=[];page.on('pageerror',error=>errors.push(error.message))
+  try {
+    await page.route('**/api/v1/cart',route=>route.fulfill({json:[{id:1,product_id:1,product,quantity:2,options:null}]}))
+    await page.goto(`${base}/login?redirect=/checkout`,{waitUntil:'networkidle'})
+    await page.getByLabel('Email address',{exact:true}).fill('invoice@example.test')
+    await page.getByLabel('Password',{exact:true}).fill('customer-password')
+    await page.getByRole('button',{name:'Login',exact:true}).click()
+    await page.waitForURL('**/checkout')
+    await page.getByRole('combobox',{name:'Country',exact:true}).waitFor()
+    const [download]=await Promise.all([page.waitForEvent('download'),page.getByRole('button',{name:'Download Proforma Invoice',exact:true}).click()]).catch(error=>{throw new Error(error.message + ' | Browser errors: ' + JSON.stringify(errors))})
+    assert.match(download.suggestedFilename(),/\.pdf$/i)
+    assert.equal(await download.failure(),null)
+    const pdf=await readFile(await download.path())
+    assert.equal(pdf.subarray(0,5).toString(),'%PDF-')
+    assert.ok(pdf.length>1000)
+    assert.match(pdf.toString('latin1'),/PROFORMA INVOICE/)
+    assert.match(pdf.toString('latin1'),/Test Product/)
+    assert.match(pdf.toString('latin1'),/%%EOF/)
+    assert.deepEqual(errors,[])
+  } finally {await context.close()}
 })

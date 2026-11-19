@@ -99,3 +99,11 @@ php artisan test
 These include rejection of customer bearer tokens on every registered protected admin route, scoped token expiry, permission denial, logout revocation, and admin status-log identity. Also verify a real admin login, product upload/edit, order status update, storefront checkout, and PDF download against staging before production rollout.
 
 Legal pages use backend resources/content/legal/*.json as bundled defaults and storage/app/private/legal-pages/*.json for admin-saved overrides. Keep the override directory writable and persistent across deployments and back it up. Run php artisan migrate to install legal-pages.index/edit permissions; Super Admin can access both editors automatically. No content seeding is required. Review the starter policy wording for the business before production use; backend docs-legal-pages.md describes direct JSON editing.
+
+### Dependency security updates (19 November 2026)
+
+Use `npm ci` with the committed lockfile before building and deploying. The security refresh resolves jsPDF 4.2.1, DOMPurify 3.4.18, fflate 0.8.3, Immutable 5.2.1 and seroval 1.8.2. Both frontend and backend npm lockfiles were audited with no reported vulnerabilities at the time of this update; new advisories can change that result.
+
+Nitro currently brings in archiver 8, which requests readdir-glob 3 and vulnerable minimatch 10. The scoped `overrides.archiver.readdir-glob` entry selects readdir-glob 4.0.0, whose implementation is unchanged from 3.0.0 but uses minimatch 11 and requires Node 20 or newer (already covered by this project's Node requirement). Keep this override until archiver/Nitro uses a patched dependency naturally. A regression test verifies recursive archive glob selection and ZIP contents, and the browser suite verifies checkout PDF downloads.
+
+Deploy the rebuilt frontend after pushing; a Git push alone does not replace the dependencies in a running deployment. Rerun the hosting vulnerability scan after deployment. No database migration is required for this dependency update.
