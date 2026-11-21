@@ -2038,3 +2038,50 @@ test('analytics shows live metrics in responsive cards with date filtering and h
     assert.deepEqual(errors,[])
   } finally { emptyDashboard=false; await context.close() }
 })
+
+test('five homepage categories keep four visible and loop one card at a time without blank space', {timeout:90_000}, async()=>{
+  categoryFixtures.push({id:6,name:'Groceries',slug:'groceries',short_description:'Everyday groceries and pantry staples',image_url:'/assets/images/home/cat-1.webp',parent_id:null,sorting_order:0,status:true,children:[]})
+  const context=await newTestContext({viewport:{width:1600,height:1000},reducedMotion:'no-preference'})
+  try {
+    const page=await context.newPage()
+    await page.clock.install()
+    await page.goto(base)
+    const carousel=page.locator('.home-categories')
+    await carousel.scrollIntoViewIfNeeded()
+    await page.mouse.move(0,0)
+    const names=await carousel.locator('.category-slide:not([aria-hidden=true]) h2').allTextContents()
+    assert.deepEqual(names,['Groceries','Packed Food','Clothing','Electronics','Kitchen Utensils'])
+    assert.equal(await carousel.locator('.category-slide[aria-hidden=true]').count(),4)
+    const coverage=()=>carousel.evaluate(root=>{
+      const viewport=root.querySelector('.categories-viewport').getBoundingClientRect()
+      const boxes=[...root.querySelectorAll('.category-slide')].map(el=>el.getBoundingClientRect()).filter(box=>box.right>viewport.left+1&&box.left<viewport.right-1)
+      return {width:viewport.width,card:boxes[0].width,left:Math.min(...boxes.map(box=>box.left))-viewport.left,right:Math.max(...boxes.map(box=>box.right))-viewport.right,count:boxes.length}
+    })
+    const initial=await coverage()
+    assert.ok(Math.abs(initial.card*4+48-initial.width)<2)
+    assert.equal(initial.count,4)
+    for(let step=0;step<5;step++){
+      await page.clock.fastForward(3500)
+      await page.waitForTimeout(750)
+      await page.clock.runFor(50)
+      const bounds=await coverage()
+      assert.ok(bounds.left<=16&&bounds.right>=-16,`Track coverage at step ${step}: ${JSON.stringify(bounds)}; ${await carousel.locator('.categories-track').getAttribute('style')}`)
+    }
+    await page.clock.runFor(100)
+    assert.match(await carousel.locator('.categories-track').getAttribute('style'), /translateX\(calc\(-0 /)
+    await carousel.hover()
+    const paused=await carousel.locator('.categories-track').getAttribute('style')
+    await page.clock.fastForward(7000)
+    assert.equal(await carousel.locator('.categories-track').getAttribute('style'),paused)
+    await page.screenshot({path:'test-artifacts/category-carousel-desktop.png',fullPage:false})
+    await page.getByRole('button',{name:'All categories',exact:true}).click()
+    assert.equal(await page.locator('.category-row-main > a').count(),5)
+    await page.setViewportSize({width:390,height:844})
+    await page.clock.runFor(100)
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false)
+    await page.emulateMedia({reducedMotion:'reduce'})
+    await page.clock.runFor(100)
+    assert.equal(await carousel.locator('.category-slide[aria-hidden=true]').first().isVisible(),false)
+    assert.equal(await carousel.locator('.category-slide:not([aria-hidden=true])').count(),5)
+  } finally { categoryFixtures.pop(); await context.close() }
+})
