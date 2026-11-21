@@ -17,21 +17,21 @@
       <!-- Sidebar: Settings -->
       <div class="builder-sidebar">
         <div class="tw:card content-card">
-          <div class="card-tabs">
+          <div class="card-tabs tw:tabs" role="tablist" aria-label="Page settings">
             <button
               v-for="tab in ['General', 'SEO']"
               :key="tab"
-              class="tab-btn tw:btn tw:btn-sm tw:btn-ghost"
+              class="tab-btn tw:tab" type="button" role="tab" :id="`page-settings-${tab.toLowerCase()}-tab`" :aria-controls="`page-settings-${tab.toLowerCase()}-panel`" :aria-selected="activeTab === tab" :tabindex="activeTab === tab ? 0 : -1" @keydown="onTabKeydown($event, tab)"
               :class="{ active: activeTab === tab }"
               @click="activeTab = tab"
             >
-              {{ tab }}
+              <Settings2 v-if="tab === 'General'" :size="16" aria-hidden="true" /><Search v-else :size="16" aria-hidden="true" />{{ tab }}
             </button>
           </div>
 
           <div class="card-body">
             <!-- General Settings -->
-            <div v-show="activeTab === 'General'" class="form-section">
+            <div v-show="activeTab === 'General'" class="form-section" role="tabpanel" id="page-settings-general-panel" aria-labelledby="page-settings-general-tab">
               <div class="form-group">
                 <label>Page Title <span class="required">*</span></label>
                 <input v-model="formData.title" type="text" class="form-input tw:input" placeholder="Ex: About Us">
@@ -53,7 +53,7 @@
               </div>
             </div>
             <!-- SEO Settings -->
-            <div v-show="activeTab === 'SEO'" class="form-section">
+            <div v-show="activeTab === 'SEO'" class="form-section" role="tabpanel" id="page-settings-seo-panel" aria-labelledby="page-settings-seo-tab">
               <div class="form-group">
                 <label>Meta Title</label>
                 <input v-model="formData.meta_title" type="text" class="form-input tw:input" placeholder="SEO Title">
@@ -147,16 +147,18 @@
       ref="imageInput"
       type="file"
       accept="image/*"
-      class="hidden tw:file-input"
+      class="editor-image-input" hidden
       @change="handleImageUpload"
     >
   </div>
 </template>
 <script setup>
 definePageMeta({ layout: "admin" })
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, nextTick } from 'vue'
 import {
   Plus,
+  Settings2,
+  Search,
   Trash2,
   GripVertical,
   Layout,
@@ -176,6 +178,15 @@ const saving = ref(false)
 const loading = ref(true)
 const uploading = ref(false)
 const activeTab = ref('General')
+const onTabKeydown = async (event, tab) => {
+  const tabs = ['General', 'SEO']
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+  event.preventDefault()
+  const index = tabs.indexOf(tab)
+  activeTab.value = event.key === 'Home' ? tabs[0] : event.key === 'End' ? tabs[1] : tabs[(index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length]
+  await nextTick()
+  document.getElementById(`page-settings-${activeTab.value.toLowerCase()}-tab`)?.focus()
+}
 const editorRefs = ref({})
 const imageInput = ref(null)
 const currentEditorIndex = ref(null)
@@ -297,6 +308,12 @@ onMounted(() => {
 })
 </script>
 <style scoped>
+.editor-image-input { display: none; }
+.page-header { flex-wrap: wrap; gap: 16px; }
+.header-actions { align-items: center; }
+.page-header .tw\:btn, .empty-info .tw\:btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; height: 40px; line-height: 1; padding: 0 16px; }
+.builder-sidebar, .builder-main { min-width: 0; }
+@media(max-width:600px) { .page-header .header-actions { width: 100%; justify-content: flex-end; }.card-header { flex-wrap: wrap; gap: 14px; }.block-header { flex-wrap: wrap; gap: 12px; } }
 .page-container {
   display: flex;
   flex-direction: column;
@@ -347,7 +364,7 @@ onMounted(() => {
 }
 .page-builder-grid {
   display: grid;
-  grid-template-columns: 350px 1fr;
+  grid-template-columns: 350px minmax(0, 1fr);
   gap: 1.5rem;
   align-items: start;
 }
@@ -364,33 +381,11 @@ onMounted(() => {
   overflow: hidden;
 }
 
-.card-tabs {
-  display: flex;
-  background-color: rgba(0, 0, 0, 0.2);
-  border-bottom: 1px solid rgb(71 37 128 / 10%);
-}
-
-.tab-btn {
-  flex: 1;
-  padding: 1rem;
-  border: none;
-  background: none;
-  color: #80718d;
-  font-weight: 600;
-  font-size: 0.875rem;
-  cursor: pointer;
-  transition: all 0.2s;
-  border-bottom: 2px solid transparent;
-}
-.tab-btn:hover {
-  color: var(--color-base-content);
-  background-color: rgb(71 37 128 / 10%);
-}
-.tab-btn.active {
-  color: var(--color-primary);
-  border-bottom-color: var(--color-primary);
-  background-color: rgba(59, 130, 246, 0.05);
-}
+.card-tabs { display: flex; gap: 6px; padding: 7px; background: #f6f2fb; border-bottom: 1px solid #ece4f4; }
+.tab-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; flex: 1; height: 44px; min-height: 44px; padding: 0 14px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: #8a749b; font-size: 13px; font-weight: 550; cursor: pointer; }
+.tab-btn:hover { background: #eee6f7; color: #684284; }
+.tab-btn.active { background: white; color: #472580; border-color: #e8def1; box-shadow: 0 2px 5px rgb(56 30 86 / 5%); font-weight: 650; }
+.tab-btn:focus-visible { outline: 2px solid #956fb9; outline-offset: 1px; }
 
 .card-header {
   padding: 1.25rem 1.5rem;
@@ -437,30 +432,12 @@ textarea.form-input {
   resize: vertical;
 }
 
-.empty-canvas {
-  padding: 5rem 1rem;
-  text-align: center;
-  display: flex;
-  justify-content: center;
-}
-.empty-canvas .empty-info {
-  max-width: 300px;
-}
-.empty-canvas .empty-info .empty-icon {
-  width: 48px;
-  height: 48px;
-  color: var(--color-base-300);
-  margin-bottom: 1.5rem;
-}
-.empty-canvas .empty-info h3 {
-  color: var(--color-base-content);
-  margin-bottom: 0.5rem;
-}
-.empty-canvas .empty-info p {
-  color: #64748b;
-  font-size: 0.9rem;
-}
-
+.empty-canvas { min-height: 340px; padding: 56px 24px; text-align: center; display: flex; align-items: center; justify-content: center; }
+.empty-canvas .empty-info { max-width: 360px; display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.empty-canvas .empty-info .empty-icon { width: 48px; height: 48px; color: #c4b5d8; margin: 0 0 8px; }
+.empty-canvas .empty-info h3 { color: var(--color-base-content); font-size: 18px; font-weight: 650; margin: 0; }
+.empty-canvas .empty-info p { color: #96819f; font-size: 13px; line-height: 1.8; margin: 0; max-width: 32ch; }
+.empty-canvas .empty-info .tw\:btn { margin-top: 8px; }
 .blocks-list {
   display: flex;
   flex-direction: column;
@@ -555,7 +532,7 @@ textarea.form-input {
 
 .btn-primary {
   text-decoration: none;
-  display: inline-block;
+  display: inline-flex;
 }
 .btn-primary:hover:not(:disabled) {
 }

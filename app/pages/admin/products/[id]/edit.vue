@@ -218,13 +218,6 @@
                 <span class="slider round"></span>
               </label>
             </div>
-            <div class="switch-container">
-              <span class="switch-label">Featured</span>
-              <label class="switch">
-                <input class="tw:checkbox tw:checkbox-primary" type="checkbox" v-model="formData.is_featured">
-                <span class="slider round"></span>
-              </label>
-            </div>
           </div>
         </div>
         <AdminProductsHomepageSettings :model-value="formData" @update:model-value="Object.assign(formData, $event)" />

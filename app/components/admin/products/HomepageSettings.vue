@@ -11,7 +11,7 @@
 <script setup>
 defineProps({ modelValue: { type: Object, required: true } })
 defineEmits(['update:modelValue'])
-const settings = [{ key: 'is_hot_deal', label: 'Hot Deal' }, { key: 'is_new_arrival', label: 'New Arrival' }, { key: 'is_best_seller', label: 'Best Seller' }]
+const settings = [{ key: 'is_featured', label: 'Featured' }, { key: 'is_hot_deal', label: 'Hot Deal' }, { key: 'is_new_arrival', label: 'New Arrival' }, { key: 'is_best_seller', label: 'Best Seller' }]
 </script>
 <style scoped>
 .homepage-settings { margin-top: 24px; }

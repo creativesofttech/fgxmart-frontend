@@ -4,7 +4,7 @@
       <div class="page-header">
         <h1 class="title">Website Pages</h1>
         <NuxtLink to="/admin/pages/create" class="btn-primary tw:btn tw:btn-sm tw:btn-primary">
-          + Create New Page
+          <Plus :size="16" aria-hidden="true" /> Create New Page
         </NuxtLink>
       </div>
       <!-- Stats Cards -->
@@ -74,7 +74,7 @@ definePageMeta({ layout: "admin" })
 import { ref, onMounted } from 'vue'
 import DataTable from '~/components/admin/ui/DataTable.vue'
 import ConfirmModal from '~/components/admin/ui/ConfirmModal.vue'
-import { FileText, CheckCircle, Edit2, Trash2 } from 'lucide-vue-next'
+import { FileText, CheckCircle, Edit2, Trash2, Plus } from 'lucide-vue-next'
 import { useAdminToast } from '~/composables/useAdminToast'
 const { success, error: toastError } = useAdminToast()
 const pages = ref([])
@@ -135,6 +135,10 @@ onMounted(() => {
 })
 </script>
 <style scoped>
+.page-header { flex-wrap: wrap; gap: 16px; }
+.page-header > .btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; height: 40px; padding: 0 16px; line-height: 1; font-weight: 600; }
+.page-header > .btn-primary svg { flex-shrink: 0; }
+@media(max-width:600px) { .page-container .stats-grid { grid-template-columns: 1fr; } }
 .page-container {
   display: flex;
   flex-direction: column;
@@ -210,7 +214,7 @@ onMounted(() => {
 
 .btn-primary {
   text-decoration: none;
-  display: inline-block;
+  display: inline-flex;
   transition: background-color 0.2s;
 }
 .btn-primary:hover:not(:disabled) {

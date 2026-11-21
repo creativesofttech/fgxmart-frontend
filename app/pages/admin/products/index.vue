@@ -19,7 +19,12 @@
           >
         </div>
       </div>
+      <div v-if="loadError" class="products-load-error" role="alert">
+        <span>{{ loadError }}</span>
+        <button type="button" class="tw:btn tw:btn-sm tw:btn-outline" @click="fetchProducts()">Try again</button>
+      </div>
       <DataTable
+        v-else
         :columns="columns"
         :data="products"
         :loading="loading"
@@ -89,6 +94,7 @@ const products = ref([])
 const loading = ref(true)
 const pagination = ref(null)
 const searchQuery = ref('')
+const loadError = ref('')
 // Modal State
 const showDeleteModal = ref(false)
 const deleting = ref(false)
@@ -104,8 +110,12 @@ const columns = [
 ]
 const fetchProducts = async (page = 1) => {
   loading.value = true
+  loadError.value = ''
   try {
-    const data = await $adminApi(`/products?page=${page}&search=${searchQuery.value}`)
+    const query = new URLSearchParams({ page: String(page) })
+    const search = searchQuery.value.trim()
+    if (search) query.set('search', search)
+    const data = await $adminApi(`/products?${query}`)
     if (data) {
       products.value = [...data.data]
       pagination.value = {
@@ -118,6 +128,7 @@ const fetchProducts = async (page = 1) => {
     }
   } catch (err) {
     console.error('Failed to fetch products:', err)
+    loadError.value = 'We couldn’t load your products. Please try again.'
   } finally {
     loading.value = false
   }
@@ -155,6 +166,15 @@ onMounted(() => {
 })
 </script>
 <style scoped>
+.products-load-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 24px;
+  color: #9c3248;
+}
 .page-container {
   display: flex;
   flex-direction: column;

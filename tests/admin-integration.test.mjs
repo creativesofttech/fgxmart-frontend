@@ -23,7 +23,7 @@ let reviewFailure = false
 const reviewResponse = page => ({data:reviewFixtures.slice((page-1)*6,page*6),summary:{count:reviewFixtures.length,average:reviewFixtures.length ? Math.round(reviewFixtures.reduce((sum,review)=>sum+review.rating,0)/reviewFixtures.length*10)/10 : null,distribution:[5,4,3,2,1].map(rating=>({rating,count:reviewFixtures.filter(review=>Math.round(review.rating)===rating).length}))},meta:{current_page:page,last_page:Math.max(1,Math.ceil(reviewFixtures.length/6))}})
 const requests = []
 const tokens = new Set(['integration-admin', 'restricted-admin', 'legal-viewer-admin'])
-const product = { id: 1, name: 'Test Product', slug: 'test-product', base_price: '10.00', discount_price: null, stock_quantity: 10, status: true, is_hot_deal: false, is_new_arrival: true, is_best_seller: false, cover_image_url: '/assets/images/home/cat-1.webp', countries: [], media: [], attribute_values: [] }
+const product = { id: 1, name: 'Test Product', slug: 'test-product', base_price: '10.00', discount_price: null, stock_quantity: 10, status: true, is_featured: true, is_hot_deal: false, is_new_arrival: true, is_best_seller: false, cover_image_url: '/assets/images/home/cat-1.webp', countries: [], media: [], attribute_values: [] }
 const publicProducts = [product,
   { ...product, id: 2, name: 'Second Product', slug: 'second-product', discount_price: '8.00', is_featured: true, is_new_arrival: false, is_hot_deal: true, cover_image_url: '/assets/images/home/cat-2.webp' },
   { ...product, id: 3, name: 'Third Product', slug: 'third-product', is_new_arrival: false, is_best_seller: true, cover_image_url: null, media: [{file_url: '/assets/images/home/cat-3.webp'}] },
@@ -55,6 +55,7 @@ const dashboardFixture = (days = 30, restricted = false) => {
     top_products: restricted ? null : emptyDashboard ? [] : [{ id: 1, name: 'Test Product', image: null, quantity: 8, revenue: 100 }],
   }
 }
+let relatedProductFixtures = [], relatedProductFailure = false
 let publicProductMode = 'normal'
 let zipcodeFixtures = []
 const zipcodeCountries = [{ id: 1, name: 'India', code: 'IN' }, { id: 2, name: 'United States', code: 'US' }]
@@ -136,7 +137,10 @@ before(async () => {
       if (/\/products\/1$/.test(url.pathname)) return send(200, { data: product })
       if (req.method !== 'GET') return send(200, { status: 'success', data: { id: 1, ...product }, message: 'Saved' })
       if (url.pathname.endsWith('/company-settings')) return send(200, { data: null })
-      if (url.pathname.endsWith('/products')) return send(200, { data: [product], total: 1, current_page: 1, last_page: 1 })
+      if (url.pathname.endsWith('/products')) {
+        if (url.searchParams.has('search') && !url.searchParams.get('search').trim()) return send(422, { message: 'The search field is required.' })
+        return send(200, { data: [product], total: 1, current_page: 1, last_page: 1 })
+      }
       if (url.pathname.endsWith('/categories')) return send(200, { data: categoryFixtures, total: 1, current_page: 1, last_page: 1 })
       if (url.pathname.endsWith('/brands')) return send(200, { data: Array.from({ length: 12 }, (_, index) => ({ id: index + 1, name: index === 0 ? 'Tata Sampann' : `Brand ${index + 1}`, slug: `brand-${index + 1}`, status: true })), total: 12, current_page: 1, last_page: 1 })
       if (url.pathname.endsWith('/attributes')) return send(200, { data: [{ id: 1, name: 'Size', values: [{ id: 10, value: 'Small' }, { id: 11, value: 'Large' }] }] })
@@ -150,6 +154,12 @@ before(async () => {
       const saved = zipcodeFixtures.find(row => row.country_id === countryId)?.zipcodes || ''
       return send(200, {data:saved.split(',').map(code=>code.trim()).filter(Boolean)})
     }
+    if (url.pathname === '/api/v1/search/suggestions') {
+      const q=url.searchParams.get('q')||''
+      if(q==='failure')return send(503,{message:'Search unavailable'})
+      const data=q==='zzzxxyy'?[]:[{...product,name:'Tata Sampann Toor Dal',base_price:'100.00',discount_price:'85.00',brand:{name:'Tata Sampann'},category:{name:'Pulses'}},{...product,id:2,name:'Tata Sampann Kala Chana',slug:'second-product',base_price:'80.00',discount_price:null,brand:{name:'Tata Sampann'},category:{name:'Pulses'}}]
+      return send(200,{data,meta:{total:data.length,has_typo_matches:q==='smapann'}})
+    }
     if (url.pathname === '/api/v1/brands') return send(200,{data:brandFixtures.filter(brand=>brand.status!==false&&brand.status!==0)})
     if (url.pathname === '/api/v1/countries') return send(200, { data: url.searchParams.has('all') ? countryFixtures : countryFixtures.slice(0, 10), total: countryFixtures.length })
     if (url.pathname.startsWith('/api/v1/legal-pages/')) {
@@ -159,6 +169,7 @@ before(async () => {
     if (url.pathname === '/api/v1/faqs') return faqFailure ? send(500,{message:'Unavailable'}) : send(200,{data:faqFixtures})
     if (url.pathname.endsWith('/company-info')) return send(200, { status: 'success', data: companyInfoFixture })
     if (url.pathname.endsWith('/categories')) return send(200, { data: categoryFixtures.map(category => renamedCategory && category.id === 1 ? { ...category, name: 'Food & Pantry', short_description: 'A description edited in admin', image_url: '/assets/images/home/cat-4.webp' } : category) })
+    if (url.pathname.startsWith('/api/v1/products/') && url.pathname.endsWith('/related')) return relatedProductFailure ? send(503,{message:'Unavailable'}) : send(200,{data:relatedProductFixtures})
     if (url.pathname === '/api/v1/products/test-product') return send(200,{data:product})
     if (url.pathname === '/api/v1/products/1/review') return send(200,{data:reviewFixtures.find(review=>review.id===1)||null})
     if (url.pathname === '/api/v1/products/1/reviews') {
@@ -174,12 +185,13 @@ before(async () => {
     }
     if (url.pathname.endsWith('/products')) {
       let data = publicProductMode === 'empty' || (publicProductMode === 'fallback' && url.searchParams.has('is_featured')) ? [] : publicProducts
-      for (const flag of ['is_hot_deal', 'is_new_arrival', 'is_best_seller']) if (url.searchParams.get(flag) === '1') data = data.filter(item => item[flag])
+      for (const flag of ['is_featured', 'is_hot_deal', 'is_new_arrival', 'is_best_seller']) if (url.searchParams.get(flag) === '1') data = data.filter(item => item[flag])
       const categoryIds = [...url.searchParams].filter(([key]) => key.startsWith('category_ids[')).map(([, value]) => Number(value))
       if (categoryIds.length) {
         const included = new Set(categoryIds.flatMap(id => [id, ...categoryFixtures.filter(category => category.parent_id === id).map(category => category.id)]))
         data = data.filter(item => included.has(item.category_id))
       }
+      if (url.searchParams.has('brand_id')) data = data.filter(item=>Number(item.brand_id || 1)===Number(url.searchParams.get('brand_id')))
       if (url.searchParams.get('on_sale') === '1') data = data.filter(item => item.discount_price !== null && Number(item.discount_price) < Number(item.base_price))
       return send(200, { data, total: data.length, last_page: 1 })
     }
@@ -471,7 +483,7 @@ test('new storefront UI supports desktop, mobile, search, location dialog and re
   await page.getByRole('heading', { name: 'Where are you shopping from?' }).waitFor()
   await page.keyboard.press('Escape')
   assert.equal(await page.locator('dialog').getAttribute('open'), null)
-  await page.getByRole('searchbox', { name: 'Search products', exact: true }).fill('Test Product')
+  await page.getByRole('combobox', { name: 'Search products', exact: true }).fill('Test Product')
   await page.getByRole('button', { name: 'Search', exact: true }).click()
   await page.waitForURL(url => url.pathname === '/products' && url.searchParams.get('search') === 'Test Product')
   await page.emulateMedia({ reducedMotion: 'reduce' })
@@ -528,22 +540,22 @@ test('category and featured cards use WebP assets and connect to wishlist and en
   await context.close()
 })
 
-test('featured products fall back to latest items, and empty catalogues have non-purchasable previews', async () => {
+test('featured products show only selected products and never substitute latest products or previews', async () => {
   try {
     publicProductMode = 'fallback'
     const start = requests.length
     const response = await fetch(`${base}/`)
     assert.equal(response.status, 200)
-    assert.match(await response.text(), /Second Product/)
+    assert.match(await response.text(), /No featured products just yet/)
     const calls = requests.slice(start).filter(request => request.url.startsWith('/api/v1/products'))
     assert.ok(calls.some(request => request.url.includes('is_featured=1')))
-    assert.ok(calls.some(request => !request.url.includes('is_featured')))
+    assert.equal(calls.some(request => { const query = new URL(request.url, 'http://fixture').searchParams; return query.get('per_page') === '4' && !query.has('is_featured') }), false)
     publicProductMode = 'empty'
     const context = await newTestContext({ viewport: { width: 1440, height: 1100 }, reducedMotion: 'reduce' })
     const page = await context.newPage()
     await page.goto(`${base}/`)
-    assert.equal(await page.locator('.catalogue-card.is-preview').count(), 4)
-    assert.equal(await page.locator('.catalogue-card .enquiry-button:disabled').count(), 4)
+    assert.equal(await page.locator('.home-featured .catalogue-card').count(), 0)
+    assert.equal(await page.locator('.catalogue-card.is-preview').count(), 0)
     assert.equal(await page.locator('.catalogue-card .wishlist-button').count(), 0)
     assert.equal(await page.locator('.product-collection .collection-card').count(), 0)
     assert.equal(await page.locator('.product-collection .collection-link').count(), 0)
@@ -1043,25 +1055,26 @@ test('homepage switches persist on create and edit and collections use real prod
   await page.getByLabel('Email address',{exact:true}).fill('admin@example.test');await page.getByLabel('Password',{exact:true}).fill('fixture-password')
   await page.getByRole('button',{name:'Login to dashboard',exact:true}).click();await page.waitForURL('**/admin/dashboard')
   await page.goto(`${base}/admin/products/create`,{waitUntil:'networkidle'})
-  for(const label of ['Hot Deal','New Arrival','Best Seller']) assert.equal(await page.getByRole('switch',{name:label,exact:true}).isChecked(),false)
-  await page.getByRole('switch',{name:'Hot Deal',exact:true}).check();await page.getByRole('switch',{name:'New Arrival',exact:true}).check()
+  for(const label of ['Featured','Hot Deal','New Arrival','Best Seller']) assert.equal(await page.getByRole('switch',{name:label,exact:true}).isChecked(),false)
+  await page.getByRole('switch',{name:'Featured',exact:true}).check();await page.getByRole('switch',{name:'Hot Deal',exact:true}).check();await page.getByRole('switch',{name:'New Arrival',exact:true}).check()
   await page.locator('.homepage-settings').scrollIntoViewIfNeeded();await page.screenshot({path:'test-artifacts/product-homepage-switches.png',fullPage:true})
   await page.getByPlaceholder('Enter product name',{exact:true}).fill('Homepage product')
   await page.getByRole('button',{name:'Save Product',exact:true}).click();await page.waitForURL('**/admin/products')
   const field=(body,name)=>body.match(new RegExp(`name="${name}"\\r\\n\\r\\n([^\\r]*)`))?.[1]
   const created=requests.findLast(request=>request.method==='POST'&&request.url==='/api/v1/admin/products')
-  assert.equal(field(created.body,'is_hot_deal'),'1');assert.equal(field(created.body,'is_new_arrival'),'1');assert.equal(field(created.body,'is_best_seller'),'0')
-  const original={is_hot_deal:product.is_hot_deal,is_new_arrival:product.is_new_arrival,is_best_seller:product.is_best_seller,cover_image_url:product.cover_image_url,media:product.media}
+  assert.equal(field(created.body,'is_featured'),'1');assert.equal(field(created.body,'is_hot_deal'),'1');assert.equal(field(created.body,'is_new_arrival'),'1');assert.equal(field(created.body,'is_best_seller'),'0')
+  const original={is_featured:product.is_featured,is_hot_deal:product.is_hot_deal,is_new_arrival:product.is_new_arrival,is_best_seller:product.is_best_seller,cover_image_url:product.cover_image_url,media:product.media}
   try {
-    Object.assign(product,{is_hot_deal:true,is_new_arrival:false,is_best_seller:true})
+    Object.assign(product,{is_featured:true,is_hot_deal:true,is_new_arrival:false,is_best_seller:true})
     await page.goto(`${base}/admin/products/1/edit`,{waitUntil:'networkidle'})
+    assert.equal(await page.getByRole('switch',{name:'Featured',exact:true}).isChecked(),true)
     assert.equal(await page.getByRole('switch',{name:'Hot Deal',exact:true}).isChecked(),true)
     assert.equal(await page.getByRole('switch',{name:'New Arrival',exact:true}).isChecked(),false)
     assert.equal(await page.getByRole('switch',{name:'Best Seller',exact:true}).isChecked(),true)
-    await page.getByRole('switch',{name:'Hot Deal',exact:true}).uncheck();await page.getByRole('switch',{name:'New Arrival',exact:true}).check();await page.getByRole('switch',{name:'Best Seller',exact:true}).uncheck()
+    await page.getByRole('switch',{name:'Featured',exact:true}).uncheck();await page.getByRole('switch',{name:'Hot Deal',exact:true}).uncheck();await page.getByRole('switch',{name:'New Arrival',exact:true}).check();await page.getByRole('switch',{name:'Best Seller',exact:true}).uncheck()
     await page.getByRole('button',{name:'Update Product',exact:true}).click();await page.waitForURL('**/admin/products')
     const updated=requests.findLast(request=>request.method==='POST'&&request.url==='/api/v1/admin/products/1')
-    assert.equal(field(updated.body,'is_hot_deal'),'0');assert.equal(field(updated.body,'is_new_arrival'),'1');assert.equal(field(updated.body,'is_best_seller'),'0')
+    assert.equal(field(updated.body,'is_featured'),'0');assert.equal(field(updated.body,'is_hot_deal'),'0');assert.equal(field(updated.body,'is_new_arrival'),'1');assert.equal(field(updated.body,'is_best_seller'),'0')
     Object.assign(product,original)
     await page.goto(`${base}/`,{waitUntil:'networkidle'})
     for(const [title,name,image] of [['Hot Deals','Second Product','cat-2.webp'],['New Arrivals','Test Product','cat-1.webp'],['Best Sellers','Third Product','cat-3.webp']]) {
@@ -1262,10 +1275,10 @@ test('first-time visitors choose country then configured zipcode, and saved choi
     await zipDialog.getByRole('button',{name:'00999',exact:true}).click();await zipDialog.waitFor({state:'hidden'})
     zipcodeLookupFailure=true
     await page.locator('.location-trigger').click();await countryDialog.getByRole('button',{name:'Bangladesh',exact:true}).click()
-    await zipDialog.getByRole('alert').waitFor()
+    await countryDialog.getByRole('alert').waitFor()
     assert.equal((await stored()).id,1,'A failed lookup must not silently bypass zipcode selection')
     zipcodeLookupFailure=false
-    await zipDialog.getByRole('button',{name:'Try again',exact:true}).click()
+    await countryDialog.getByRole('button',{name:'Try again',exact:true}).click()
     await zipDialog.getByRole('button',{name:'A1A 1A1',exact:true}).waitFor()
     await page.setViewportSize({width:390,height:844})
     assert.ok(await zipDialog.locator('.location-box').evaluate(element=>{const bounds=element.getBoundingClientRect();return bounds.left>=0&&bounds.right<=innerWidth&&element.scrollWidth<=element.clientWidth}))
@@ -1275,8 +1288,7 @@ test('first-time visitors choose country then configured zipcode, and saved choi
     let release
     await page.route('**/countries/2/zipcodes',async route=>{await new Promise(resolve=>{release=resolve});await route.fulfill({json:{data:['00123']}})})
     await page.getByRole('button',{name:'Choose location',exact:true}).click()
-    await countryDialog.getByRole('button',{name:'Bangladesh',exact:true}).click();await zipDialog.getByRole('status').waitFor()
-    await zipDialog.getByRole('button',{name:'Change country',exact:true}).click()
+    await countryDialog.getByRole('button',{name:'Bangladesh',exact:true}).click();await countryDialog.getByRole('status').waitFor()
     await countryDialog.getByRole('button',{name:'Australia',exact:true}).click();await zipDialog.getByRole('button',{name:'00999',exact:true}).click()
     release();await page.waitForLoadState('networkidle')
     assert.deepEqual(await stored(),{id:1,name:'Australia',zipcode:'00999'})
@@ -1671,11 +1683,16 @@ test('homepage brands load dynamically and loop seamlessly only above nine brand
       }
     }
     await checkSeam(9)
-    await section.getByRole('button',{name:'Pause brand scrolling',exact:true}).click()
+    assert.equal(await section.getByRole('button',{name:/Pause|Resume/}).count(),0)
+    const firstBrandLink=section.locator('.brand-group:not(.brand-clone) .brand-link').first()
+    assert.equal(await firstBrandLink.getAttribute('href'),'/products?brand_id=1')
+    assert.equal(await section.locator('.brand-clone .brand-link').first().getAttribute('href'),'/products?brand_id=1')
+    await firstBrandLink.focus()
     assert.equal(await section.locator('.brands-track').evaluate(element=>getComputedStyle(element).animationPlayState),'paused')
-    await page.screenshot({path:'test-artifacts/dynamic-brands-desktop.png'})
-    await section.getByRole('button',{name:'Resume brand scrolling',exact:true}).click()
+    await firstBrandLink.evaluate(element=>element.blur())
+    await page.mouse.move(0,0)
     assert.equal(await section.locator('.brands-track').evaluate(element=>getComputedStyle(element).animationPlayState),'running')
+    await page.screenshot({path:'test-artifacts/dynamic-brands-desktop.png'})
     await section.locator('.brands-viewport').hover()
     assert.equal(await section.locator('.brands-track').evaluate(element=>getComputedStyle(element).animationPlayState),'paused')
     await page.mouse.move(0,0)
@@ -1770,4 +1787,254 @@ test('admin brand rearranging loads every logo, saves ordering and supports drag
     assert.equal(await page.locator('.home-brands .brand-group:not(.brand-clone) img').first().getAttribute('alt'),'Ordered Brand 2')
     assert.deepEqual(errors,[])
   } finally {brandFixtures=original;adminBrandOrderFixtures=null;brandOrderFailure=false;await context.close()}
+})
+test('brand logos open a filtered catalogue and preserve brand selection across catalogue controls', {timeout:120_000}, async () => {
+  const original=brandFixtures
+  brandFixtures=[{id:1,name:'Selected Brand',status:true,image_url:'/images/logo/fgx-logo-dark.png'},{id:2,name:'Empty Brand',status:true,image_url:'/images/logo/fgx-logo-dark.png'}]
+  const context=await newTestContext({viewport:{width:1440,height:1050},reducedMotion:'reduce'})
+  const page=await context.newPage();const errors=[],catalogueRequests=[];page.on('pageerror',error=>errors.push(error.message))
+  try {
+    await page.route('**/api/v1/products?*',route=>{
+      const url=new URL(route.request().url());catalogueRequests.push(url)
+      const data=url.searchParams.get('brand_id')==='2'?[]:[{...product,brand_id:1,brand:{id:1,name:'Selected Brand'}}]
+      return route.fulfill({json:{data,total:data.length,current_page:Number(url.searchParams.get('page')||1),last_page:data.length?2:1}})
+    })
+    await page.goto(`${base}/`,{waitUntil:'domcontentloaded'})
+    await page.getByRole('link',{name:'Shop Selected Brand',exact:true}).click()
+    await page.waitForURL('**/products?brand_id=1')
+    await page.getByRole('heading',{name:'Selected Brand Products',exact:true}).waitFor()
+    await page.locator('.product-results-col').getByText('Test Product',{exact:true}).waitFor()
+    assert.equal(catalogueRequests.at(-1).searchParams.get('brand_id'),'1')
+    await page.getByRole('combobox',{name:'Sort products',exact:true}).click()
+    await Promise.all([page.waitForResponse(response=>response.url().includes('/api/v1/products?')&&response.url().includes('sort=name_asc')),page.getByRole('option',{name:'Name: A-Z',exact:true}).click()])
+    assert.equal(catalogueRequests.at(-1).searchParams.get('brand_id'),'1')
+    await Promise.all([page.waitForResponse(response=>response.url().includes('/api/v1/products?')&&response.url().includes('page=2')),page.getByRole('button',{name:'Go to page 2',exact:true}).click()])
+    assert.equal(catalogueRequests.at(-1).searchParams.get('brand_id'),'1')
+    await page.getByRole('button',{name:'Clear brand filter',exact:true}).click()
+    await page.getByRole('heading',{name:'All Products',exact:true}).waitFor()
+    assert.equal(new URL(page.url()).searchParams.has('brand_id'),false)
+    await page.waitForLoadState('networkidle')
+    await page.goto(`${base}/products?brand_id=2`,{waitUntil:'domcontentloaded'})
+    await page.getByRole('heading',{name:'Empty Brand Products',exact:true}).waitFor()
+    await page.getByRole('heading',{name:'No products found',exact:true}).waitFor()
+    await page.getByRole('button',{name:'Clear All Filters',exact:true}).click()
+    await page.getByRole('heading',{name:'All Products',exact:true}).waitFor()
+    await page.waitForLoadState('networkidle')
+    await page.setViewportSize({width:390,height:844});await page.goto(`${base}/`,{waitUntil:'domcontentloaded'})
+    await page.getByRole('link',{name:'Shop Selected Brand',exact:true}).click()
+    await page.getByRole('heading',{name:'Selected Brand Products',exact:true}).waitFor()
+    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth))
+    assert.deepEqual(errors,[])
+  } finally {brandFixtures=original;await context.close()}
+})
+test('countries without zipcodes never flash the zipcode step during lookup', {timeout:120_000}, async () => {
+  const context=await newTestContext({reducedMotion:'reduce'},false)
+  const page=await context.newPage();const errors=[];page.on('pageerror',error=>errors.push(error.message))
+  let release
+  try {
+    await page.route('**/countries/1/zipcodes',async route=>{await new Promise(resolve=>{release=resolve});await route.fulfill({json:{data:[]}})})
+    await page.goto(`${base}/`,{waitUntil:'networkidle'})
+    const dialog=page.getByRole('dialog',{name:'Where are you shopping from?',exact:true})
+    await dialog.waitFor()
+    await page.evaluate(()=>{
+      window.zipcodeStepSeen=false
+      window.locationObserver=new MutationObserver(()=>{if(document.querySelector('dialog[open] #zipcode-search'))window.zipcodeStepSeen=true})
+      window.locationObserver.observe(document.querySelector('.location-modal'),{subtree:true,childList:true,attributes:true})
+    })
+    await dialog.getByRole('button',{name:'Australia',exact:true}).click()
+    await dialog.getByRole('status').filter({hasText:'Checking zipcodes for Australia'}).waitFor()
+    assert.equal(await page.locator('#zipcode-search').count(),0)
+    assert.equal(await page.evaluate(()=>localStorage.getItem('fgx-country')),null)
+    release();await dialog.waitFor({state:'hidden'})
+    assert.equal(await page.evaluate(()=>window.zipcodeStepSeen),false)
+    assert.deepEqual(await page.evaluate(()=>JSON.parse(localStorage.getItem('fgx-country'))),{id:1,name:'Australia',zipcode:null})
+    await page.evaluate(()=>window.locationObserver.disconnect())
+    assert.deepEqual(errors,[])
+  } finally {release?.();await context.close()}
+})
+test('header search offers typo suggestions after three characters with keyboard, mouse and mobile navigation', {timeout:120_000}, async () => {
+  const context=await newTestContext({viewport:{width:1440,height:1050},reducedMotion:'reduce'})
+  const page=await context.newPage();const errors=[];page.on('pageerror',error=>errors.push(error.message))
+  try {
+    await page.goto(`${base}/`,{waitUntil:'networkidle'})
+    const search=page.getByRole('combobox',{name:'Search products',exact:true})
+    const list=page.getByRole('listbox',{name:'Product suggestions',exact:true})
+    const before=requests.filter(request=>request.url.startsWith('/api/v1/search/suggestions')).length
+    await search.fill('sa');await page.waitForTimeout(350)
+    assert.equal(await search.getAttribute('aria-expanded'),'false')
+    assert.equal(requests.filter(request=>request.url.startsWith('/api/v1/search/suggestions')).length,before)
+    assert.equal(await page.getByRole('button',{name:'Search',exact:true}).isDisabled(),true)
+    await search.fill('smapann')
+    await list.getByRole('option').first().waitFor()
+    await page.getByText('Including close spelling matches',{exact:true}).waitFor()
+    assert.equal(await list.getByRole('option').count(),2)
+    assert.equal(await list.locator('img').count(),2)
+    assert.ok((await list.innerText()).includes('$85.00'))
+    await page.screenshot({path:'test-artifacts/search-suggestions-desktop.png'})
+    await search.press('ArrowUp');assert.equal(await search.getAttribute('aria-activedescendant'),'search-product-2')
+    await search.press('ArrowDown');assert.equal(await search.getAttribute('aria-activedescendant'),'search-product-1')
+    await search.press('Escape');assert.equal(await search.getAttribute('aria-expanded'),'false')
+    await search.press('ArrowDown');assert.equal(await search.getAttribute('aria-expanded'),'true')
+    await search.press('Enter');await page.waitForURL('**/products/test-product')
+    await search.fill('smapann')
+    await list.getByRole('option').first().waitFor()
+    await page.getByRole('link',{name:/View all results for/}).click()
+    await page.waitForURL(url=>url.pathname==='/products'&&url.searchParams.get('search')==='smapann')
+    assert.equal(await search.getAttribute('aria-expanded'),'false')
+    await search.fill('zzzxxyy');await page.getByText('No matches just yet',{exact:true}).waitFor()
+    await search.fill('failure');await page.getByRole('alert').filter({hasText:'Search is taking a moment'}).waitFor()
+    await search.fill('toor');await list.getByRole('option').first().waitFor()
+    assert.equal(await list.locator('mark').first().innerText(),'Toor')
+    await page.locator('.products-page').click({position:{x:8,y:8}})
+    assert.equal(await search.getAttribute('aria-expanded'),'false')
+    await page.setViewportSize({width:390,height:844})
+    await search.fill('smapann');await list.getByRole('option').first().waitFor()
+    assert.ok(await page.locator('.search-suggestions').evaluate(element=>{const bounds=element.getBoundingClientRect();return bounds.left>=0&&bounds.right<=innerWidth&&element.scrollWidth<=element.clientWidth}))
+    await page.screenshot({path:'test-artifacts/search-suggestions-mobile.png'})
+    await list.getByRole('option').first().click();await page.waitForURL('**/products/test-product')
+    assert.deepEqual(errors,[])
+  } finally {await context.close()}
+})
+
+test('header suggestions ignore superseded requests and cancel when the query drops below three characters', {timeout:120_000}, async () => {
+  const context=await newTestContext({reducedMotion:'reduce'}),page=await context.newPage()
+  let release
+  try {
+    await page.route('**/search/suggestions?q=slow',async route=>{await new Promise(resolve=>{release=resolve});await route.fulfill({json:{data:[{...product,name:'Stale product'}],meta:{total:1}}}).catch(()=>{})})
+    await page.goto(`${base}/`,{waitUntil:'networkidle'})
+    const search=page.getByRole('combobox',{name:'Search products',exact:true})
+    const sent=page.waitForRequest(request=>request.url().endsWith('/search/suggestions?q=slow'))
+    await search.fill('slow');await sent
+    await search.fill('smapann')
+    await page.getByRole('listbox',{name:'Product suggestions',exact:true}).getByRole('option').first().waitFor()
+    release()
+    await page.waitForLoadState('networkidle')
+    assert.equal(await page.getByText('Stale product',{exact:true}).count(),0)
+    await search.fill('sa')
+    assert.equal(await search.getAttribute('aria-expanded'),'false')
+    assert.equal(await page.getByRole('listbox',{name:'Product suggestions',exact:true}).count(),0)
+  } finally {release?.();await context.close()}
+})
+
+test('product details show same-category catalogue cards below reviews with working quick view', {timeout:120_000}, async () => {
+  const previous=relatedProductFixtures, category=product.category
+  product.category={id:2,name:'Snacks',slug:'snacks'}
+  relatedProductFixtures=[{...product,id:20,name:'Related snack',slug:'related-snack',base_price:'12.00',summary:'A short related product summary.'},{...product,id:21,name:'Another snack',slug:'another-snack',base_price:'15.00'}]
+  const context=await newTestContext({viewport:{width:1440,height:1100},reducedMotion:'reduce'})
+  const page=await context.newPage();const errors=[];page.on('pageerror',error=>errors.push(error.message))
+  try {
+    await page.goto(`${base}/products/test-product`,{waitUntil:'networkidle'})
+    const section=page.getByRole('region',{name:'More from this category',exact:true})
+    await section.scrollIntoViewIfNeeded()
+    assert.equal(await section.locator('.product-card').count(),2)
+    assert.ok(await page.locator('#customer-reviews').evaluate((element)=>element.getBoundingClientRect().bottom<=document.querySelector('.related-products').getBoundingClientRect().top))
+    assert.equal(await section.getByRole('link',{name:'View category',exact:true}).getAttribute('href'),'/category/snacks')
+    assert.equal(await section.getByRole('link',{name:'Related snack',exact:true}).first().getAttribute('href'),'/products/related-snack')
+    await section.locator('.product-image-container').first().hover()
+    await section.getByRole('button',{name:'Quick view Related snack',exact:true}).click()
+    const dialog=page.getByRole('dialog',{name:'Quick view: Related snack',exact:true})
+    await dialog.waitFor();await dialog.getByText('A short related product summary.',{exact:true}).waitFor()
+    await page.keyboard.press('Escape');await dialog.waitFor({state:'hidden'})
+    await page.screenshot({path:'test-artifacts/related-products-desktop.png',fullPage:true})
+    await page.setViewportSize({width:390,height:844});await section.scrollIntoViewIfNeeded()
+    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth))
+    await page.screenshot({path:'test-artifacts/related-products-mobile.png',fullPage:true})
+    relatedProductFailure=true;await page.reload({waitUntil:'networkidle'})
+    await section.getByRole('alert').waitFor()
+    relatedProductFailure=false;await section.getByRole('button',{name:'Try again',exact:true}).click()
+    await section.getByRole('link',{name:'Related snack',exact:true}).first().waitFor()
+    relatedProductFixtures=[];await page.reload({waitUntil:'networkidle'})
+    assert.equal(await section.count(),0)
+    assert.deepEqual(errors,[])
+  } finally {relatedProductFixtures=previous;relatedProductFailure=false;product.category=category;await context.close()}
+})
+
+test('Featured selection controls homepage cards and the View all catalogue filter', {timeout:120_000}, async () => {
+  const original=product.is_featured
+  const context=await newTestContext({viewport:{width:1440,height:1000},reducedMotion:'reduce'}),page=await context.newPage()
+  try {
+    product.is_featured=false
+    await page.goto(`${base}/`,{waitUntil:'networkidle'})
+    const section=page.getByRole('region',{name:'Featured Products',exact:true})
+    assert.equal(await section.getByRole('heading',{name:'Test Product',exact:true}).count(),0)
+    assert.equal(await section.locator('.catalogue-card').count(),3)
+    await section.getByRole('link',{name:'View all',exact:true}).click()
+    await page.waitForURL('**/products?featured=1')
+    await page.getByRole('heading',{level:1,name:'Featured Products',exact:true}).waitFor()
+    assert.ok(requests.some(request=>request.url.startsWith('/api/v1/products?')&&request.url.includes('is_featured=1')))
+    assert.equal(await page.locator('.product-results-col').getByRole('heading',{name:'Test Product',exact:true}).count(),0)
+    product.is_featured=true
+    await page.goto(`${base}/`,{waitUntil:'domcontentloaded'})
+    await section.getByRole('heading',{name:'Test Product',exact:true}).waitFor()
+  } finally {product.is_featured=original;await context.close()}
+})
+
+test('admin product list omits blank search, encodes terms and shows recoverable loading errors', { timeout: 60_000 }, async () => {
+  const context = await newTestContext()
+  try {
+    const page = await context.newPage()
+    await page.goto(`${base}/admin-access`)
+    await page.getByLabel('Email address', { exact: true }).fill('admin@example.test')
+    await page.getByLabel('Password', { exact: true }).fill('fixture-password')
+    await page.getByRole('button', { name: 'Login to dashboard', exact: true }).click()
+    await page.waitForURL('**/admin/dashboard')
+    const initial = page.waitForResponse(response => response.url().includes('/api/admin/products?'))
+    await page.goto(`${base}/admin/products`)
+    assert.equal(new URL((await initial).url()).searchParams.has('search'), false)
+    await page.getByText('Test Product', { exact: true }).waitFor()
+    const search = page.getByPlaceholder('Search products...')
+    const term = 'Rice & Dal'
+    const searched = page.waitForResponse(response => new URL(response.url()).searchParams.get('search') === term)
+    await search.fill(term)
+    assert.equal((await searched).status(), 200)
+    const cleared = page.waitForResponse(response => response.url().includes('/api/admin/products?') && !new URL(response.url()).searchParams.has('search'))
+    await search.fill('   ')
+    assert.equal((await cleared).status(), 200)
+    await page.route('**/api/admin/products?**', route => route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({message:'Fixture failure'}) }))
+    await search.fill('failure')
+    await page.getByRole('alert').filter({hasText:/load your products/}).waitFor()
+    assert.equal(await page.getByText('No data available', {exact:true}).count(), 0)
+    await page.unroute('**/api/admin/products?**')
+    await page.getByRole('button', {name:'Try again',exact:true}).click()
+    await page.getByText('Test Product', {exact:true}).waitFor()
+    assert.equal(await page.locator('.products-load-error').count(), 0)
+  } finally { await context.close() }
+})
+
+test('analytics shows live metrics in responsive cards with date filtering and honest empty states', { timeout: 90_000 }, async () => {
+  const context = await newTestContext({viewport:{width:1440,height:1100}, reducedMotion:'reduce'})
+  try {
+    const page = await context.newPage()
+    const errors=[]; page.on('pageerror', error=>errors.push(error.message))
+    await page.goto(`${base}/admin-access`)
+    await page.getByLabel('Email address', {exact:true}).fill('admin@example.test')
+    await page.getByLabel('Password', {exact:true}).fill('fixture-password')
+    await page.getByRole('button', {name:'Login to dashboard',exact:true}).click()
+    await page.waitForURL('**/admin/dashboard')
+    await page.goto(`${base}/admin/analytics`)
+    await page.getByRole('heading', {name:'Store analytics',exact:true}).waitFor()
+    await page.locator('.revenue-chart canvas').waitFor()
+    assert.equal(await page.locator('[data-metric="revenue"] .metric-value').innerText(), '$1,200.00')
+    assert.equal(await page.locator('[data-insight="aov"] strong').innerText(), '$100.00')
+    assert.match(await page.locator('[data-insight="paid-rate"] strong').innerText(), /100.0/)
+    assert.equal(await page.getByRole('heading',{name:'Recent Orders',exact:true}).count(),0)
+    assert.equal(await page.locator('.insight-card').count(), 3)
+    const panel = page.locator('.report-panel').first()
+    assert.equal(await panel.evaluate(el=>getComputedStyle(el).backgroundColor), 'rgb(255, 255, 255)')
+    assert.ok(await panel.evaluate(el=>parseFloat(getComputedStyle(el).paddingLeft)) >= 16)
+    await page.screenshot({path:'test-artifacts/analytics-desktop.png',fullPage:true})
+    await page.getByRole('combobox', {name:'Analytics period',exact:true}).click()
+    await page.getByRole('option', {name:'Last 7 days',exact:true}).click()
+    await page.waitForFunction(()=>document.querySelector('[data-insight="aov"] strong')?.textContent==='$50.00')
+    await page.setViewportSize({width:390,height:844})
+    await page.screenshot({path:'test-artifacts/analytics-mobile.png',fullPage:true})
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth > innerWidth),false)
+    emptyDashboard=true
+    await page.goto(`${base}/admin/analytics`)
+    await page.getByText('No orders in this period.', {exact:true}).waitFor()
+    assert.equal(await page.locator('.activity-chart canvas').count(),1)
+    assert.equal(await page.locator('.status-progress').first().getAttribute('value'),'0')
+    await page.getByText('No product sales to report yet', {exact:true}).waitFor()
+    assert.deepEqual(errors,[])
+  } finally { emptyDashboard=false; await context.close() }
 })

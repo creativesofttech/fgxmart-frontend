@@ -2,16 +2,13 @@
   <section class="home-featured" aria-labelledby="featured-title">
     <div class="featured-heading">
       <div><p class="section-eyebrow">HANDPICKED FOR YOUR EVERYDAY</p><h2 id="featured-title">Featured Products</h2></div>
-      <NuxtLink class="view-products" to="/products">View all <ArrowRight :size="16" aria-hidden="true" /></NuxtLink>
+      <NuxtLink class="view-products" to="/products?featured=1">View all <ArrowRight :size="16" aria-hidden="true" /></NuxtLink>
     </div>
     <p class="enquiry-notice" role="status" aria-live="polite">{{ notice }}</p>
     <div v-if="pending" class="featured-grid" aria-label="Loading featured products" aria-busy="true"><div v-for="index in 4" :key="index" class="tw:skeleton product-skeleton" /></div>
     <div v-else-if="error" class="catalogue-message" role="alert"><PackageOpen :size="26" aria-hidden="true" /><p>We couldn’t load the products just now.</p><button type="button" class="tw:btn tw:btn-outline tw:btn-primary tw:btn-sm" @click="refresh">Try again</button></div>
     <div v-else-if="products.length" class="featured-grid"><CatalogueCard v-for="product in products" :key="product.id" :product="product" @notice="notice = $event" /></div>
-    <template v-else>
-      <p class="upcoming-note">New finds are on their way. Here’s a little of what’s coming.</p>
-      <div class="featured-grid"><CatalogueCard v-for="preview in previews" :key="preview.category" :preview="preview" /></div>
-    </template>
+    <div v-else class="catalogue-message"><PackageOpen :size="28" aria-hidden="true" /><p>No featured products just yet. Check back soon for our handpicked favourites.</p></div>
   </section>
 </template>
 
@@ -21,18 +18,9 @@ import CatalogueCard from '~/components/product/CatalogueCard.vue'
 
 const config = useRuntimeConfig()
 const notice = ref('')
-const previews = [
-  { category: 'Packed Food', name: 'Your next pantry favourites' },
-  { category: 'Clothing', name: 'Everyday wardrobe essentials' },
-  { category: 'Electronics', name: 'Smart finds for everyday life' },
-  { category: 'Kitchen Utensils', name: 'Good things for your kitchen' },
-]
 const { data: products, pending, error, refresh } = await useAsyncData('home-featured-products', async () => {
   const featured = await $fetch(`${config.public.apiBase}/products`, { query: { is_featured: 1, per_page: 4 } })
-  const active = (featured.data || []).filter(product => product.status !== false)
-  if (active.length) return active.slice(0, 4)
-  const latest = await $fetch(`${config.public.apiBase}/products`, { query: { per_page: 4 } })
-  return (latest.data || []).filter(product => product.status !== false).slice(0, 4)
+  return (featured.data || []).filter(product => product.status !== false && product.is_featured).slice(0, 4)
 }, { default: () => [] })
 </script>
 
@@ -47,8 +35,7 @@ h2::after { content: ''; position: absolute; width: 43px; height: 3px; border-ra
 .enquiry-notice { min-height: 12px; font-size: 11px; line-height: 1.5; color: #548018; margin: 8px 0 5px; }
 .featured-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; }
 .product-skeleton { height: 330px; background: #f1edf6; border-radius: 14px; }
-.upcoming-note { font-size: 12px; color: #93879e; margin: 0 0 16px; }
 .catalogue-message { min-height: 220px; border: 1px dashed #dfd4eb; border-radius: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; color: #8b769d; font-size: 13px; background: #fcfaff; }
 @media (max-width: 960px) { .featured-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; } }
-@media (max-width: 600px) { .home-featured { padding-top: 30px; } .featured-grid { gap: 12px; } .section-eyebrow { font-size: 8px; letter-spacing: 1.1px; } h2 { font-size: 21px; padding-bottom: 11px; } .view-products { font-size: 11px; gap: 5px; } .upcoming-note { font-size: 11px; } }
+@media (max-width: 600px) { .home-featured { padding-top: 30px; } .featured-grid { gap: 12px; } .section-eyebrow { font-size: 8px; letter-spacing: 1.1px; } h2 { font-size: 21px; padding-bottom: 11px; } .view-products { font-size: 11px; gap: 5px; } }
 </style>

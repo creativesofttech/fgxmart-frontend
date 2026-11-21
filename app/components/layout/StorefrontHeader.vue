@@ -19,11 +19,7 @@
           <ChevronDown :size="13" aria-hidden="true" />
         </button>
 
-        <form class="header-search" role="search" @submit.prevent="submitSearch">
-          <label for="storefront-search" class="sr-only">Search products</label>
-          <input id="storefront-search" v-model="searchQuery" class="tw:input" type="search" placeholder="Search products and everyday essentials…" autocomplete="off" required />
-          <button class="tw:btn tw:btn-primary" aria-label="Search" type="submit"><Search :size="21" aria-hidden="true" /></button>
-        </form>
+        <StorefrontSearch />
 
         <nav class="header-actions" aria-label="Your account and selections">
           <NuxtLink to="/my-account?tab=order" class="header-action track-action"><Package :size="21" aria-hidden="true" /><span>Track order</span></NuxtLink>
@@ -61,6 +57,8 @@
         <template v-if="locationStep === 'country'">
         <label for="country-search" class="sr-only">Search countries</label>
         <input id="country-search" v-model="countrySearch" class="tw:input country-search" type="search" placeholder="Search your country" />
+        <p v-if="zipcodesLoading" class="location-status" role="status">Checking zipcodes for {{ pendingCountry?.name }}...</p>
+        <p v-else-if="zipcodesError" class="location-status" role="alert">We couldn't check zipcodes for {{ pendingCountry?.name }}. <button type="button" @click="selectCountry(pendingCountry)">Try again</button></p>
         <p v-if="countriesLoading" class="location-status" role="status">Loading countries…</p>
         <p v-else-if="countriesError" class="location-status" role="alert">We couldn't load countries. <button type="button" @click="loadCountries">Try again</button></p>
         <ul v-else class="country-list">
@@ -86,8 +84,9 @@
 
 <script setup>
 import { fetchActiveCountries } from '~/utils/countries'
-import { ArrowUpRight, Check, ChevronDown, Heart, MapPin, MessageCircle, Package, PackageCheck, Search, ShoppingCart, UserRound, X } from 'lucide-vue-next'
+import { ArrowUpRight, Check, ChevronDown, Heart, MapPin, MessageCircle, Package, PackageCheck, ShoppingCart, UserRound, X } from 'lucide-vue-next'
 import StorefrontCategories from '~/components/layout/StorefrontCategories.vue'
+import StorefrontSearch from '~/components/layout/StorefrontSearch.vue'
 import { useAuthStore } from '~/stores/auth'
 import { useCartStore } from '~/stores/cart'
 import { useWishlistStore } from '~/stores/wishlist'
@@ -97,7 +96,6 @@ const config = useRuntimeConfig()
 const auth = useAuthStore()
 const cart = useCartStore()
 const wishlist = useWishlistStore()
-const searchQuery = ref('')
 const locationDialog = useTemplateRef('locationDialog')
 const selectedCountry = useState('storefront-country', () => null)
 const hasSavedAddress = ref(false)
@@ -129,13 +127,8 @@ const isShoppingLinkActive = link => link.label === 'Hot Deals'
   : route.path === link.to
 const filteredCountries = computed(() => countries.value.filter(country => country.name.toLowerCase().includes(countrySearch.value.trim().toLowerCase())))
 
-watch(() => route.query.search, value => { searchQuery.value = typeof value === 'string' ? value : '' }, { immediate: true })
 watch(() => route.fullPath, () => closeLocation())
 
-const submitSearch = () => {
-  const search = searchQuery.value.trim()
-  if (search) navigateTo({ path: '/products', query: { search } })
-}
 const loadCountries = async () => {
   countriesLoading.value = true
   countriesError.value = false
@@ -168,13 +161,15 @@ const countryZipcodes = async country => {
 const selectCountry = async country => {
   if (!country) return
   const version = ++selectionVersion
-  pendingCountry.value = country; locationStep.value = 'zipcode'; zipcodeSearch.value = ''; zipcodes.value = []; zipcodesError.value = false; zipcodesLoading.value = true
-  await nextTick(); zipcodeSearchInput.value?.focus({ preventScroll: true })
+  pendingCountry.value = country; zipcodeSearch.value = ''; zipcodes.value = []; zipcodesError.value = false; zipcodesLoading.value = true
   try {
     const codes = await countryZipcodes(country)
     if (version !== selectionVersion) return
     zipcodes.value = codes
-    if (!codes.length) completeLocation(country)
+    if (!codes.length) { completeLocation(country); return }
+    locationStep.value = 'zipcode'; zipcodesLoading.value = false
+    await nextTick()
+    if (version === selectionVersion) zipcodeSearchInput.value?.focus({ preventScroll: true })
   } catch { if (version === selectionVersion) zipcodesError.value = true }
   finally { if (version === selectionVersion) zipcodesLoading.value = false }
 }
@@ -214,7 +209,7 @@ const initializeLocation = async () => {
     pendingCountry.value = country; zipcodes.value = codes; locationStep.value = 'zipcode'; locationDialog.value?.showModal()
   } catch {
     if (version !== selectionVersion) return
-    pendingCountry.value = country; locationStep.value = 'zipcode'; zipcodesError.value = true; locationDialog.value?.showModal()
+    pendingCountry.value = country; locationStep.value = 'country'; zipcodesError.value = true; locationDialog.value?.showModal()
   }
 }
 onMounted(() => {
@@ -233,20 +228,16 @@ onMounted(() => {
 .topbar-inner a { color: white; }
 .topbar-divider { height: 10px; border-left: 1px solid rgb(255 255 255 / 32%); margin: 0 3px; }
 .sticky-wrapper { background: rgb(255 255 255 / 98%); border-bottom: 1px solid #eeeaf3; }
-.main-header { display: grid; grid-template-columns: 173px 148px minmax(200px, 1fr) auto; align-items: center; gap: 22px; min-height: 89px; }
+.main-header { display: grid; grid-template-columns: 173px 224px minmax(200px, 1fr) auto; --header-field-height: 44px; align-items: center; gap: 22px; min-height: 89px; }
 .brand-link { display: flex; align-items: center; }
 .brand-link:focus, .brand-link:active { outline: none; border: 0; box-shadow: none; }
 .brand-link:focus-visible { opacity: .8; }
 .brand-link img { display: block; width: 173px; height: auto; }
-.location-trigger { display: flex; align-items: center; gap: 8px; text-align: left; border: 1px solid #e8e3ed; border-radius: 8px; padding: 8px 9px; color: #332344; min-width: 0; background: #fff; }
+.location-trigger { height: var(--header-field-height); box-sizing: border-box; display: flex; align-items: center; gap: 8px; text-align: left; border: 1px solid #e8e3ed; border-radius: 8px; padding: 8px 9px; color: #332344; min-width: 0; background: #fff; }
+.location-trigger > svg { flex-shrink: 0; }
 .location-trigger span { min-width: 0; flex: 1; }
 .location-trigger small { display: block; color: #968ba0; font-size: 9px; margin-bottom: 1px; }
-.location-trigger strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; font-weight: 600; max-width: 90px; }
-.header-search { display: flex; height: 42px; border: 1px solid #e8e2ee; border-radius: 8px; background: #faf9fc; min-width: 0; }
-.header-search:focus-within { border-color: #825bb3; box-shadow: 0 0 0 3px rgb(71 37 128 / 6%); }
-.header-search .tw\:input { flex: 1; width: 0; min-width: 0; height: 100%; padding: 0 13px; font-size: 12px; outline: none; border: 0; border-radius: 8px 0 0 8px; background: transparent; color: #332344; box-shadow: none; }
-.header-search input::placeholder { color: #918798; }
-.header-search .tw\:btn { width: 46px; min-height: 0; height: 100%; border-radius: 0 7px 7px 0; padding: 0; background: #472580; color: white; border: 0; }
+.location-trigger strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 600; }
 .header-actions { display: flex; align-items: center; gap: 18px; }
 .header-action { display: inline-flex; align-items: center; gap: 6px; color: #25163b; font-size: 11px; white-space: nowrap; font-weight: 550; }
 .header-action:hover, .primary-nav a:hover { color: #7042ab; }
@@ -288,7 +279,7 @@ onMounted(() => {
   .storefront-topbar, .topbar-inner { min-height: 30px; }
   .topbar-inner { justify-content: center; font-size: 9px; }
   .topbar-inner > a { display: none; }
-  .main-header { grid-template-columns: 1fr auto; gap: 14px; padding-top: 17px; padding-bottom: 15px; }
+  .main-header { --header-field-height: 41px; grid-template-columns: 1fr auto; gap: 14px; padding-top: 17px; padding-bottom: 15px; }
   .brand-link img { width: 154px; }
   .header-actions { grid-column: 2; grid-row: 1; gap: 16px; }
   .header-action > span:not(.action-icon) { display: none; }

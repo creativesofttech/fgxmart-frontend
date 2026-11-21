@@ -202,6 +202,7 @@
          </v-col>
 
       </v-row>
+      <ProductRelated v-if="product.id" :key="product.id" :product-id="product.id" :category="product.category" />
     </v-container>
 
 

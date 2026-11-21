@@ -36,6 +36,7 @@
         <!-- Product Grid -->
         <v-col cols="12" md="9" class="product-results-col">
           <h1 class="text-h4 font-weight-bold mb-5">{{ pageTitle }}</h1>
+          <div v-if="brandId" class="brand-filter-summary"><span>Brand: <strong>{{ selectedBrand?.name || 'Selected brand' }}</strong></span><button type="button" class="tw:btn tw:btn-ghost tw:btn-xs" aria-label="Clear brand filter" @click="clearBrand">Clear <span aria-hidden="true">×</span></button></div>
           <!-- Top Bar -->
           <v-card class="rounded-xl border pa-4 mb-6 d-flex align-center justify-space-between px-6" elevation="0">
             <div class="text-body-1 font-weight-medium">
@@ -118,13 +119,15 @@ const showQuickView = ref(false)
 const selectedProduct = ref({})
 const selectedCategoryIds = ref([])
 const searchQuery = ref(route.query.search || '')
+const brandId = computed(() => String(route.query.brand_id || ''))
 const dealsOnly = computed(() => !props.collection && route.query.deals === '1')
+const featuredOnly = computed(() => route.query.featured === '1')
 const collectionName = computed(() => props.collection || String(route.query.collection || ''))
 const collectionFilter = computed(() => ({ 'new-arrivals': 'is_new_arrival', 'best-sellers': 'is_best_seller' })[collectionName.value])
-const pageTitle = computed(() => dealsOnly.value ? 'Hot Deals' : ({ 'new-arrivals': 'New Arrivals', 'best-sellers': 'Best Sellers' })[collectionName.value] || 'All Products')
+const pageTitle = computed(() => brandId.value ? `${selectedBrand.value?.name || 'Brand'} Products` : featuredOnly.value ? 'Featured Products' : dealsOnly.value ? 'Hot Deals' : ({ 'new-arrivals': 'New Arrivals', 'best-sellers': 'Best Sellers' })[collectionName.value] || 'All Products')
 const priceRange = ref([0, 1000])
-const sortBy = ref('Newest')
-const sortOptions = ['Newest', 'Price: Low to High', 'Price: High to Low', 'Name: A-Z']
+const sortBy = ref(searchQuery.value ? 'Relevance' : 'Newest')
+const sortOptions = computed(() => [...(searchQuery.value ? ['Relevance'] : []), 'Newest', 'Price: Low to High', 'Price: High to Low', 'Name: A-Z'])
 
 const currentPage = ref(1)
 const perPage = ref(12)
@@ -136,6 +139,8 @@ useHead({
 // Fetch Categories
 const { data: categoriesData, pending: categoriesPending } = await useFetch(`${apiBase}/categories?all=1&roots=1`)
 const categories = computed(() => categoriesData.value?.data || [])
+const { data: brandsData } = await useFetch(`${apiBase}/brands?all=1`)
+const selectedBrand = computed(() => brandsData.value?.data?.find(brand => String(brand.id) === brandId.value))
 
 
 // Fetch Products with Pagination
@@ -148,7 +153,9 @@ const productsUrl = computed(() => {
   selectedCategoryIds.value.forEach((id, index) => params.append(`category_ids[${index}]`, id))
 
   if (dealsOnly.value) params.append('is_hot_deal', '1')
+  if (featuredOnly.value) params.append('is_featured', '1')
   if (collectionFilter.value) params.append(collectionFilter.value, '1')
+  if (brandId.value) params.append('brand_id', brandId.value)
 
   // Price range - currently backend might not support this directly, but we can pass them
   params.append('min_price', priceRange.value[0])
@@ -161,6 +168,8 @@ const productsUrl = computed(() => {
     params.append('sort', 'price_desc')
   } else if (sortBy.value === 'Name: A-Z') {
     params.append('sort', 'name_asc')
+  } else if (sortBy.value === 'Newest' && searchQuery.value) {
+    params.append('sort', 'newest')
   }
 
   if (searchQuery.value) {
@@ -183,6 +192,7 @@ const clearSearch = () => {
   searchQuery.value = ''
   router.push({ query: { ...route.query, search: undefined } })
 }
+const clearBrand = () => router.push({ query: { ...route.query, brand_id: undefined } })
 
 const resetFilters = () => {
   selectedCategoryIds.value = []
@@ -200,14 +210,15 @@ const openQuickView = (product) => {
 
 
 // Ensure filters are reactive and reset page
-watch([selectedCategoryIds, priceRange, sortBy, searchQuery, dealsOnly, collectionFilter], () => {
+watch([selectedCategoryIds, priceRange, sortBy, searchQuery, dealsOnly, collectionFilter, brandId, featuredOnly], () => {
     currentPage.value = 1
 })
 
 // Sync search query from URL
 watch(() => route.query.search, (newVal) => {
-  searchQuery.value = newVal || ''
+  searchQuery.value = typeof newVal === 'string' ? newVal : ''
 })
+watch(searchQuery, value => { if (value) sortBy.value = 'Relevance'; else if (sortBy.value === 'Relevance') sortBy.value = 'Newest' })
 
 useHead({
   title: () => `${pageTitle.value} - FGXMART`,
@@ -218,6 +229,7 @@ useHead({
 </script>
 
 <style scoped>
+.brand-filter-summary { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: -4px 0 20px; color: #78618a; font-size: 13px; }.brand-filter-summary strong { color: #472580; }.brand-filter-summary button { display: inline-flex; align-items: center; gap: 8px; }
 .products-page {
   background-color: #f8fafc;
 }
